@@ -1,0 +1,255 @@
+.eligibility-page {
+  min-height: 100vh;
+  background: #F7F7F7;
+  display: flex;
+  flex-direction: column;
+}
+
+.eligibility-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 1.5rem;
+}
+
+.eligibility-header .back-button {
+  margin-bottom: 1rem;
+}
+
+.service-banner h2 {
+  margin-bottom: 0.5rem;
+  font-size: 1.5rem;
+}
+
+.service-banner p {
+  margin: 0;
+  font-size: 0.95rem;
+  opacity: 0.9;
+}
+
+.eligibility-content {
+  flex-grow: 1;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 2rem 1rem;
+}
+
+.info-section {
+  background: white;
+  border-radius: 12px;
+  margin-bottom: 1rem;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.section-header {
+  width: 100%;
+  padding: 1.2rem;
+  background: white;
+  border: none;
+  border-bottom: 2px solid #F7F7F7;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #2D2D2D;
+  transition: all 0.3s ease;
+}
+
+.section-header:hover {
+  background: #F7F7F7;
+}
+
+.section-icon {
+  font-size: 1.3rem;
+}
+
+.expand-icon {
+  margin-left: auto;
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+}
+
+.section-content {
+  padding: 1.5rem;
+  border-top: 1px solid #F7F7F7;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+.benefit-item {
+  padding: 0.6rem 0;
+  color: #2D2D2D;
+  display: flex;
+  gap: 0.8rem;
+  align-items: flex-start;
+}
+
+.check-mark {
+  color: #06D6A0;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.check-button {
+  width: 100%;
+  padding: 0.8rem;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+}
+
+.check-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.requirements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.requirement-item {
+  padding: 1rem;
+  background: #F7F7F7;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  transition: all 0.3s ease;
+}
+
+.requirement-item.verified {
+  background: #d4edda;
+  border-left: 4px solid #06D6A0;
+}
+
+.requirement-item.pending {
+  background: #fff3cd;
+  border-left: 4px solid #FFB703;
+}
+
+.status-icon {
+  font-size: 1.2rem;
+  flex-shrink: 0;
+  min-width: 24px;
+}
+
+.requirement-item span:nth-child(2) {
+  flex-grow: 1;
+  color: #2D2D2D;
+}
+
+.status-label {
+  font-size: 0.85rem;
+  color: var(--gray);
+  background: white;
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+}
+
+.eligibility-result {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border-radius: 12px;
+  text-align: center;
+  animation: slideDown 0.3s ease-out;
+}
+
+.eligibility-result.eligible {
+  background: #d4edda;
+  border: 2px solid #06D6A0;
+  color: #155724;
+}
+
+.eligibility-result.ineligible {
+  background: #f8d7da;
+  border: 2px solid #E63946;
+  color: #721c24;
+}
+
+.eligibility-result h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.eligibility-result p {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.document-item {
+  padding: 0.8rem 0;
+  color: #2D2D2D;
+  display: flex;
+  gap: 0.8rem;
+  align-items: center;
+  border-bottom: 1px solid #F7F7F7;
+}
+
+.document-item:last-child {
+  border-bottom: none;
+}
+
+.next-steps {
+  color: #2D2D2D;
+  line-height: 1.8;
+  font-size: 0.95rem;
+  padding: 1rem;
+  background: #F7F7F7;
+  border-radius: 8px;
+  margin: 0;
+}
+
+.eligibility-footer {
+  text-align: center;
+  padding: 2rem 1rem;
+  background: white;
+  border-top: 1px solid #EEE;
+}
+
+.apply-button {
+  width: 100%;
+  max-width: 400px;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #06D6A0 0%, #00b894 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin-bottom: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(6, 214, 160, 0.4);
+}
+
+.apply-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(6, 214, 160, 0.6);
+}
+
+.footer-text {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--gray);
+}

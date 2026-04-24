@@ -1,0 +1,186 @@
+.nearby-loan-section {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid rgba(109, 76, 65, 0.18);
+  border-radius: 12px;
+  background: #fffaf0;
+}
+
+.nearby-loan-head h4 {
+  margin: 0 0 4px;
+  color: #3f2a1d;
+  font-size: 1rem;
+}
+
+.nearby-loan-head p {
+  margin: 0 0 10px;
+  color: #6d4c41;
+  font-size: 0.84rem;
+}
+
+.nearby-loan-input-row {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.nearby-loan-input-row label {
+  font-size: 0.82rem;
+  color: #6d4c41;
+  font-weight: 600;
+}
+
+.nearby-loan-input-row input {
+  border: 1px solid rgba(109, 76, 65, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  background: #fff;
+}
+
+.nearby-loan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.nearby-loan-card {
+  border: 1px solid rgba(109, 76, 65, 0.2);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+}
+
+.nearby-loan-card-head {
+  margin-bottom: 8px;
+}
+
+.nearby-loan-card-head strong {
+  display: block;
+  font-size: 0.9rem;
+  color: #3f2a1d;
+}
+
+.nearby-loan-card-head small {
+  color: #7b6b5f;
+  font-size: 0.76rem;
+}
+
+.nearby-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.nearby-tags span {
+  background: #efe2c8;
+  color: #3f2a1d;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+}
+
+.nearby-metrics p {
+  margin: 0 0 4px;
+  font-size: 0.8rem;
+  color: #5f5045;
+}
+
+.nearby-details-btn {
+  width: 100%;
+  margin-top: 6px;
+  border: none;
+  border-radius: 8px;
+  padding: 8px;
+  background: #6d4c41;
+  color: #fff;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.nearby-loan-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(24, 16, 10, 0.45);
+  padding: 12px;
+}
+
+.nearby-loan-modal {
+  position: relative;
+  width: min(760px, 96vw);
+  max-height: 86vh;
+  overflow-y: auto;
+  background: #fffdf8;
+  border: 1px solid rgba(109, 76, 65, 0.25);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.nearby-loan-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  border: none;
+  border-radius: 999px;
+  background: #efe2c8;
+  color: #3f2a1d;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.nearby-loan-modal h3 {
+  margin: 0;
+  color: #3f2a1d;
+}
+
+.nearby-loan-modal-sub {
+  margin: 4px 0 10px;
+  color: #7b6b5f;
+  font-size: 0.86rem;
+}
+
+.nearby-loan-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 14px;
+  margin-bottom: 10px;
+}
+
+.nearby-loan-summary-grid p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: #5f5045;
+}
+
+.nearby-loan-modal-section {
+  margin: 8px 0 4px;
+  color: #3f2a1d;
+  font-weight: 700;
+}
+
+.nearby-loan-list {
+  margin: 0 0 8px 16px;
+  padding: 0;
+  color: #5f5045;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 700px) {
+  .nearby-loan-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .nearby-loan-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.global-option-actions {
+  margin-top: 8px;
+}
+
