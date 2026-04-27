@@ -61,6 +61,7 @@ export default function HomePage({ tr, onNavigate, uiLanguage, profile }) {
                     </div>
                     <p>{offer.desc}</p>
                     {offer.date && <small>{offer.date}</small>}
+                    {offer.sourceName && <small>{offer.sourceName}</small>}
                     {offer.url && (
                       <small>
                         <a href={offer.url} target="_blank" rel="noreferrer">Source</a>
@@ -83,6 +84,7 @@ export default function HomePage({ tr, onNavigate, uiLanguage, profile }) {
                     </div>
                     <p>{offer.desc}</p>
                     {offer.date && <small>{offer.date}</small>}
+                    {offer.sourceName && <small>{offer.sourceName}</small>}
                     {offer.url && (
                       <small>
                         <a href={offer.url} target="_blank" rel="noreferrer">Source</a>

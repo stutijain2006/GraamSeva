@@ -3,8 +3,31 @@
  */
 
 import { API_ENDPOINTS, buildURL } from './apiConfig'
-import { getMockLatestOffers } from './mockData'
 import apiClient from './apiClient'
+
+const cacheKey = (language) => `graamseva_home_updates_${language}`
+
+function readCachedUpdates(language) {
+  try {
+    const raw = localStorage.getItem(cacheKey(language))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed?.data) ? parsed.data : []
+  } catch {
+    return []
+  }
+}
+
+function writeCachedUpdates(language, data) {
+  try {
+    localStorage.setItem(cacheKey(language), JSON.stringify({
+      data,
+      savedAt: new Date().toISOString(),
+    }))
+  } catch {
+    // Ignore storage failures; live API remains the source of truth.
+  }
+}
 
 function normalizeUpdateItem(item, index) {
   return {
@@ -15,6 +38,7 @@ function normalizeUpdateItem(item, index) {
     date: item.date || item.publishedAt || item.published_on || '',
     type: item.type || item.updateType || 'update',
     url: item.url || item.link || null,
+    sourceName: item.sourceName || item.source_name || item.source || '',
   }
 }
 
@@ -55,39 +79,33 @@ class NewSchemesOffersService {
         },
         {
           headers: { 'Accept-Language': language },
+          timeout: 45000,
         },
       )
 
       const normalized = normalizeResponse(aiResponse)
       if (normalized.length > 0) {
+        writeCachedUpdates(language, normalized)
         return {
           data: normalized,
-          source: 'ai',
+          source: aiResponse.source || 'verified-government-sources',
+          lastFetched: aiResponse.lastFetched || null,
+          refreshAfterSeconds: aiResponse.refreshAfterSeconds || null,
         }
       }
 
-      throw new Error('AI response did not include updates')
+      return {
+        data: readCachedUpdates(language),
+        source: aiResponse.source || 'verified-government-sources',
+        lastFetched: aiResponse.lastFetched || null,
+        refreshAfterSeconds: aiResponse.refreshAfterSeconds || null,
+      }
     } catch (aiError) {
-      console.warn('AI home updates failed, trying standard updates API:', aiError.message)
+      console.warn('Verified government updates API failed:', aiError.message)
 
-      try {
-        const url = buildURL(API_ENDPOINTS.NEW_SCHEMES.LIST)
-        const response = await apiClient.get(url, {
-          headers: { 'Accept-Language': language },
-        })
-
-        const normalized = normalizeResponse(response)
-        return {
-          data: normalized,
-          source: 'api',
-        }
-      } catch (error) {
-        console.warn('New schemes API failed, using mock data:', error.message)
-
-        return {
-          data: getMockLatestOffers(language),
-          source: 'mock',
-        }
+      return {
+        data: readCachedUpdates(language),
+        source: 'unavailable',
       }
     }
   }
