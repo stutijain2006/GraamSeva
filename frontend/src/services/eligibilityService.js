@@ -21,8 +21,8 @@ class EligibilityService {
       
       const url = buildURL(API_ENDPOINTS.ELIGIBILITY.CHECK)
       const response = await apiClient.post(url, {
-        schemeId,
-        userData,
+        scheme_id: schemeId,
+        farmer_data: userData,
         language,
       })
 
@@ -61,11 +61,10 @@ class EligibilityService {
     try {
       console.log(`Fetching eligibility criteria for scheme ${schemeId}...`)
       
-      const url = buildURL(
-        API_ENDPOINTS.ELIGIBILITY.GET_CRITERIA.replace(':schemeId', schemeId)
-      )
+      const url = buildURL(API_ENDPOINTS.ELIGIBILITY.GET_CRITERIA)
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
+        params: { scheme_id: schemeId },
       })
 
       return {
@@ -96,8 +95,8 @@ class EligibilityService {
       
       const url = buildURL(API_ENDPOINTS.ELIGIBILITY.VERIFY)
       const response = await apiClient.post(url, {
-        schemeId,
-        formData,
+        scheme_id: schemeId,
+        form_data: formData,
         language,
       })
 

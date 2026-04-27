@@ -123,8 +123,8 @@ class LoanService {
 
       console.log('Loan options fetched successfully:', response)
       return {
-        data: response.loans || response.data || response,
-        source: 'api',
+        data: response.loans || response.nearby_loans || response.results || response.data || response,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Loan API failed, using mock data:', error.message)

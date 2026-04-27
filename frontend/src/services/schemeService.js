@@ -7,6 +7,9 @@ import { API_ENDPOINTS, buildURL } from './apiConfig'
 import { getMockSchemes, getMockSchemeById, getMockLatestOffers } from './mockData'
 import apiClient from './apiClient'
 
+const asList = (response, key) =>
+  response?.[key] || response?.results || response?.data || (Array.isArray(response) ? response : [])
+
 class SchemeService {
   /**
    * Get all schemes
@@ -24,8 +27,8 @@ class SchemeService {
 
       console.log('Schemes fetched successfully:', response)
       return {
-        data: response.schemes || response,
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Schemes API failed, using mock data:', error.message)
@@ -110,14 +113,15 @@ class SchemeService {
     try {
       console.log(`Fetching schemes for state: ${state}`)
 
-      const url = buildURL(API_ENDPOINTS.SCHEMES.BY_STATE.replace(':state', state))
+      const url = buildURL(API_ENDPOINTS.SCHEMES.BY_STATE)
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
+        params: { state },
       })
 
       return {
-        data: response.schemes || response,
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn(`State schemes API failed for ${state}, using mock data:`, error.message)
@@ -161,8 +165,8 @@ class SchemeService {
       })
 
       return {
-        data: response.schemes || response,
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Popular schemes API failed, using mock data:', error.message)
@@ -189,10 +193,10 @@ class SchemeService {
         headers: { 'Accept-Language': language },
       })
 
-      const items = response.schemes || response || []
+      const items = asList(response, 'schemes')
       return {
         data: items.slice(0, limit),
-        source: 'api',
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Latest schemes API failed, using mock data:', error.message)

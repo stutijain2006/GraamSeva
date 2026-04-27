@@ -10,22 +10,29 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR.parent / '.env')
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-lvo+buovn&-@ix1t%(!z6lb*$w6v*1$&+sek8^+^!10fv27q98'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lvo+buovn&-@ix1t%(!z6lb*$w6v*1$&+sek8^+^!10fv27q98')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 
 # Application definition
@@ -107,9 +114,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = os.getenv('LANGUAGE_CODE', 'en-us')
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = os.getenv('TIME_ZONE', 'UTC')
 
 USE_I18N = True
 
@@ -131,10 +138,19 @@ REST_FRAMEWORK = {
 # CORS Configuration - Allow frontend to communicate
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:3000',
+    'http://localhost:5173',
     'http://localhost:8000',
     'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
     'http://127.0.0.1:8000',
 ]
+
+env_cors_origins = [
+    origin.strip()
+    for origin in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+]
+CORS_ALLOWED_ORIGINS = sorted(set(CORS_ALLOWED_ORIGINS + env_cors_origins))
 
 CORS_ALLOW_CREDENTIALS = True
 

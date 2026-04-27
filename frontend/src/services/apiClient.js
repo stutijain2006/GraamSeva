@@ -21,15 +21,27 @@ class APIClient {
       body = null,
       token = null,
       timeout = this.timeout,
+      params = null,
     } = options
 
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
+    const requestUrl = new URL(url)
+
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          requestUrl.searchParams.set(key, value)
+        }
+      })
+    }
 
     try {
-      const response = await fetch(url, {
+      const response = await fetch(requestUrl.toString(), {
         method,
         headers: {
+          Accept: 'application/json',
+          ...(body && { 'Content-Type': 'application/json' }),
           ...headers,
           ...(token && { Authorization: `Bearer ${token}` }),
         },

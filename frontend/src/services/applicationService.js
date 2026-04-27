@@ -20,7 +20,13 @@ class ApplicationService {
       
       const url = buildURL(API_ENDPOINTS.APPLICATIONS.SUBMIT)
       const payload = {
-        ...applicationData,
+        application_id: applicationData.application_id || `APP-${Date.now()}`,
+        scheme_id: applicationData.scheme_id || applicationData.schemeId || 0,
+        farmer_name: applicationData.farmer_name || applicationData.fullName || applicationData.name || 'GraamSeva User',
+        farmer_phone: applicationData.farmer_phone || applicationData.mobile || applicationData.phone || '0000000000',
+        farmer_aadhar: applicationData.farmer_aadhar || applicationData.aadhaar || applicationData.aadhar || null,
+        status: applicationData.isDraft ? 'DRAFT' : 'SUBMITTED',
+        application_data: applicationData,
         language,
         submittedAt: new Date().toISOString(),
       }
@@ -32,8 +38,8 @@ class ApplicationService {
       return {
         success: true,
         data: response,
-        referenceId: response.referenceId,
-        source: 'api',
+        referenceId: response.referenceId || response.application_id,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Application submission API failed, using mock response:', error.message)
@@ -89,14 +95,12 @@ class ApplicationService {
     try {
       console.log(`Fetching applications for user: ${userId}`)
       
-      const url = buildURL(
-        API_ENDPOINTS.APPLICATIONS.LIST.replace(':userId', userId)
-      )
-      const response = await apiClient.get(url)
+      const url = buildURL(API_ENDPOINTS.APPLICATIONS.LIST)
+      const response = await apiClient.get(url, { params: { user_id: userId } })
 
       return {
-        data: response.applications || response,
-        source: 'api',
+        data: response.applications || response.results || response,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn(`User applications API failed, returning empty array:`, error.message)

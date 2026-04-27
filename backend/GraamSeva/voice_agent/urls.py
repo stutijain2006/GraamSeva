@@ -1,11 +1,11 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter
 from .views import (
     VoiceConversationViewSet, VoiceTranscriptViewSet,
     VoiceAgentViewSet, VoiceLogViewSet
 )
 
-router = DefaultRouter()
+router = SimpleRouter()
 router.register(r'conversations', VoiceConversationViewSet, basename='conversation')
 router.register(r'transcripts', VoiceTranscriptViewSet, basename='transcript')
 router.register(r'agent', VoiceAgentViewSet, basename='agent')
