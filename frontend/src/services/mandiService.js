@@ -29,7 +29,12 @@ const normalizeMandi = (item = {}) => ({
 })
 
 const normalizeMandiList = (response) => {
-  const raw = (Array.isArray(response) && response) || response?.prices || response?.mandis || []
+  const raw =
+    (Array.isArray(response) && response) ||
+    response?.results ||
+    response?.prices ||
+    response?.mandis ||
+    []
   return raw.map(normalizeMandi)
 }
 
