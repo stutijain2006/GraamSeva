@@ -31,10 +31,13 @@ function writeCachedUpdates(language, data) {
 
 function normalizeUpdateItem(item, index) {
   const governmentLevel = item.governmentLevel || item.government_level || 'Government'
+  const title = item.title || item.headline || item.name || ''
+  const descRaw = item.desc || item.description || item.details || item.summary || ''
+  const desc = String(descRaw || '').trim() || String(title || '').trim()
   return {
     id: item.id ?? item.scheme_id ?? `ai-${index + 1}`,
-    title: item.title || item.headline || item.name || 'Government Update',
-    desc: item.desc || item.description || item.details || item.summary || '',
+    title: title || 'Government Update',
+    desc,
     badge: item.badge || item.category || governmentLevel,
     date: item.date || item.publishedAt || item.published_on || item.updated_at || '',
     type: item.type || item.updateType || 'update',
@@ -53,7 +56,9 @@ function normalizeResponse(data) {
     (Array.isArray(data?.data) && data.data) ||
     []
 
-  return rawItems.map(normalizeUpdateItem)
+  return rawItems
+    .map(normalizeUpdateItem)
+    .filter((item) => String(item.title || '').trim().length > 0 && String(item.desc || '').trim().length > 0)
 }
 
 class NewSchemesOffersService {

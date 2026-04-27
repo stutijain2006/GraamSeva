@@ -87,6 +87,7 @@
 .update-item-head {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
   margin-bottom: 4px;
 }
@@ -94,6 +95,8 @@
 .update-item-head strong {
   font-size: 0.84rem;
   line-height: 1.25;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .update-item-head span {
@@ -103,6 +106,10 @@
   font-size: 0.68rem;
   color: var(--earth-900);
   white-space: nowrap;
+  flex: 0 0 auto;
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .update-item p {

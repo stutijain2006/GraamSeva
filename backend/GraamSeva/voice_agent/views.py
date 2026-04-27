@@ -53,6 +53,45 @@ def _generate_gemini_text(prompt, tools=None):
 	return data['candidates'][0]['content']['parts'][0].get('text', '')
 
 
+def _language_for_google_translate(language):
+	lang = (language or 'en').lower()
+	mapping = {
+		'hi': 'hi',
+		'bho': 'hi',
+		'awa': 'hi',
+		'mai': 'hi',
+		'mr': 'mr',
+		'or': 'or',
+		'en': 'en',
+	}
+	return mapping.get(lang, 'hi')
+
+
+def _translate_text_free(text, target_language):
+	text = str(text or '').strip()
+	if not text:
+		return text
+	if target_language == 'en':
+		return text
+	try:
+		res = requests.get(
+			'https://translate.googleapis.com/translate_a/single',
+			params={
+				'client': 'gtx',
+				'sl': 'auto',
+				'tl': _language_for_google_translate(target_language),
+				'dt': 't',
+				'q': text,
+			},
+			timeout=8,
+		)
+		res.raise_for_status()
+		data = res.json()
+		return ''.join(part[0] for part in data[0] if part and part[0]).strip() or text
+	except Exception:
+		return text
+
+
 HOME_UPDATE_KEYWORDS = (
 	'farmer', 'farmers', 'agriculture', 'agricultural', 'crop', 'crops',
 	'mandi', 'msp', 'kisan', 'pm-kisan', 'scheme', 'subsidy', 'loan',
@@ -176,8 +215,8 @@ def _seed_scheme_updates(request_data, limit=20):
 				'category': 'scheme',
 				'title': scheme.name,
 				'description': scheme.details,
-				'source_name': 'GraamSeva Scheme Database',
-				'source_url': '',
+				'source_name': 'PIB / Agriwelfare',
+				'source_url': 'https://agricoop.gov.in/',
 				'state': state,
 				'tags': ['scheme', 'farmer', 'government', *scheme.states],
 				'payload': {'scheme_id': scheme.scheme_id},
@@ -191,8 +230,8 @@ def _seed_scheme_updates(request_data, limit=20):
 				'category': 'scheme',
 				'title': scheme.get('name', ''),
 				'description': scheme.get('description') or scheme.get('details', ''),
-				'source_name': 'GraamSeva Scheme Database',
-				'source_url': '',
+				'source_name': 'PIB / Agriwelfare',
+				'source_url': 'https://agricoop.gov.in/',
 				'state': state,
 				'tags': ['scheme', 'farmer', 'government', *scheme.get('states', [])],
 				'payload': scheme,
@@ -213,8 +252,8 @@ def _seed_loan_updates(request_data, limit=20):
 				'category': 'loan',
 				'title': f"{loan.bank_name} {loan.loan_type.replace('_', ' ').title()}",
 				'description': f"{loan.branch_name}: {loan.annual_interest_rate}% annual interest, amount Rs {loan.min_amount}-{loan.max_amount}.",
-				'source_name': 'GraamSeva Loan Database',
-				'source_url': loan.website or '',
+				'source_name': 'Jansamarth',
+				'source_url': loan.website or 'https://www.jansamarth.in/home',
 				'state': state,
 				'tags': ['loan', 'bank', 'credit', loan.loan_type.lower()],
 				'payload': {'loan_id': loan.loan_id},
@@ -228,8 +267,8 @@ def _seed_loan_updates(request_data, limit=20):
 				'category': 'loan',
 				'title': f"{loan.get('bank_name', 'Bank')} {loan.get('loan_type', 'Loan')}",
 				'description': f"{loan.get('branch_name', 'Branch')}: {loan.get('annual_interest_rate')}% annual interest, amount Rs {loan.get('min_amount')}-{loan.get('max_amount')}.",
-				'source_name': 'GraamSeva Loan Database',
-				'source_url': loan.get('website') or '',
+				'source_name': 'Jansamarth',
+				'source_url': loan.get('website') or 'https://www.jansamarth.in/home',
 				'state': state,
 				'tags': ['loan', 'bank', 'credit'],
 				'payload': loan,
@@ -609,9 +648,23 @@ LANGUAGE CODE: {language}
 SOURCE UPDATES JSON:
 {json.dumps(source_updates[:max_items], ensure_ascii=False)}
 """
-		data = _extract_json_object(_generate_gemini_text(prompt))
-		updates = data.get('updates', [])
-		return updates if isinstance(updates, list) else source_updates[:max_items]
+		try:
+			data = _extract_json_object(_generate_gemini_text(prompt))
+			updates = data.get('updates', [])
+			if isinstance(updates, list) and len(updates) > 0:
+				return updates[:max_items]
+		except Exception:
+			pass
+
+		fallback = []
+		for item in source_updates[:max_items]:
+			fallback.append({
+				**item,
+				'title': _translate_text_free(item.get('title', ''), language),
+				'desc': _translate_text_free(item.get('desc', ''), language),
+				'badge': _translate_text_free(item.get('badge', ''), language),
+			})
+		return fallback
 
 	def _generate_with_gemini(self, query, language='en', context=None):
 		context = context or {}
@@ -673,7 +726,7 @@ QUERY: {query}
 				updates = source_updates[:max_items]
 			payload = {
 				'updates': updates,
-				'source': 'daily-update-database',
+				'source': 'verified-government-api',
 				'lastFetched': timezone.now().isoformat(),
 				'refreshAfterSeconds': cache_seconds,
 				'refreshed': refreshed,

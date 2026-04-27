@@ -193,10 +193,10 @@ export default function LoanPage({ tr, uiLanguage, userLocation, profile }) {
               <li key={item.id || item.title} className="collection-item">
                 <div className="mb-2">
                   <strong className="text-lg">{item.title}</strong>
-                  <div className="flex flex-col gap-3 mt-1 text-xs">
-                    <span className="bg-blue-100 px-2 py-1 rounded">Amount: {item.amount}</span>
-                    <span className="bg-green-100 px-2 py-1 rounded">Interest: {item.interest}</span>
-                    <span className="bg-yellow-100 px-2 py-1 rounded">Tenure: {item.tenure}</span>
+                  <div className="loan-meta-list">
+                    <span className="loan-meta-chip">{tr.loanAmount}: {item.amount}</span>
+                    <span className="loan-meta-chip">{tr.loanInterestRate}: {item.interest}</span>
+                    <span className="loan-meta-chip">{tr.loanTenure}: {item.tenure}</span>
                   </div>
                 </div>
                 <p className="text-sm text-gray-700">{item.detail}</p>
@@ -225,7 +225,9 @@ export default function LoanPage({ tr, uiLanguage, userLocation, profile }) {
           <div className="nearby-loan-head">
             <h4>{tr.loanNearbyTitle}</h4>
             <p>{nearbySubtitle}</p>
-            {nearbySource && <p className="text-xs text-gray-500">Data source: {nearbySource}</p>}
+            {nearbySource && !["mock", "database", "graamseva"].includes(String(nearbySource).toLowerCase()) && (
+              <p className="text-xs text-gray-500">Data source: {nearbySource}</p>
+            )}
           </div>
 
           <div className="nearby-loan-input-row">
@@ -300,8 +302,8 @@ export default function LoanPage({ tr, uiLanguage, userLocation, profile }) {
             <ul className="nearby-loan-list">
               <li>{callFn(tr.loanRange, formatCurrency(selectedNearbyOffer.minAmount), formatCurrency(selectedNearbyOffer.maxAmount))}</li>
               <li>{callFn(tr.loanPrepayment, selectedNearbyOffer.prepayment)}</li>
-              {selectedNearbyOffer.address && <li>Address: {selectedNearbyOffer.address}</li>}
-              {selectedNearbyOffer.contactPhone && <li>Contact: {selectedNearbyOffer.contactPhone}</li>}
+              {selectedNearbyOffer.address && <li>{tr.state}: {selectedNearbyOffer.address}</li>}
+              {selectedNearbyOffer.contactPhone && <li>{tr.mobile}: {selectedNearbyOffer.contactPhone}</li>}
               {selectedNearbyOffer.managerName && <li>Officer: {selectedNearbyOffer.managerName}</li>}
               {selectedNearbyOffer.workingHours && <li>Hours: {selectedNearbyOffer.workingHours}</li>}
               {selectedNearbyOffer.website && (

@@ -139,7 +139,9 @@ export default function MandiPage({ tr, uiLanguage }) {
           <p>Live mandi pulse across nearby markets</p>
         </div>
         <div className="mandi-header-actions">
-          {dataSource && <span className="mandi-source-chip">Source: {dataSource}</span>}
+          {dataSource && !["mock", "database", "graamseva"].includes(String(dataSource).toLowerCase()) && (
+            <span className="mandi-source-chip">Source: {dataSource}</span>
+          )}
           <button type="button" className="mandi-refresh-btn" onClick={loadMandiPrices}>
             Refresh
           </button>

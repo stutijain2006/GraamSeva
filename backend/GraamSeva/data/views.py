@@ -3,6 +3,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
 import math
+import json
+import os
 import requests
 
 from .models import Scheme, MandiPrice, LoanOption, Eligibility, Application, Dashboard
@@ -75,6 +77,83 @@ class SafeViewMixin:
 		)
 		return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 2)
 
+	def _localize_payload(self, payload, language, fields):
+		if not payload or language in ('en', ''):
+			return payload
+		def fallback_translate(obj):
+			if isinstance(obj, dict):
+				out = {}
+				for key, value in obj.items():
+					if isinstance(value, str) and key in fields:
+						out[key] = self._translate_text_free(value, language)
+					else:
+						out[key] = fallback_translate(value)
+				return out
+			if isinstance(obj, list):
+				return [fallback_translate(item) for item in obj]
+			return obj
+		api_key = os.getenv('GEMINI_API_KEY') or os.getenv('VITE_GEMINI_API_KEY')
+		if not api_key:
+			return fallback_translate(payload)
+		model_name = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash')
+		text = json.dumps(payload, ensure_ascii=False)
+		prompt = f"""
+Translate only the values of these keys into language code "{language}": {fields}.
+Keep all keys, ids, numbers, urls, and date formats unchanged.
+Return strict JSON only with same structure.
+INPUT_JSON:
+{text}
+"""
+		try:
+			response = requests.post(
+				f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent",
+				params={'key': api_key},
+				json={'contents': [{'parts': [{'text': prompt}]}]},
+				timeout=18,
+			)
+			response.raise_for_status()
+			data = response.json()
+			model_text = data['candidates'][0]['content']['parts'][0].get('text', '')
+			start = model_text.find('{')
+			end = model_text.rfind('}')
+			if start != -1 and end != -1 and end > start:
+				return json.loads(model_text[start:end + 1])
+		except Exception:
+			return fallback_translate(payload)
+		return payload
+
+	def _translate_text_free(self, text, language):
+		text = str(text or '').strip()
+		if not text or language == 'en':
+			return text
+		lang_map = {
+			'hi': 'hi',
+			'bho': 'hi',
+			'awa': 'hi',
+			'mai': 'hi',
+			'mr': 'mr',
+			'or': 'or',
+			'en': 'en',
+		}
+		target = lang_map.get((language or '').lower(), 'hi')
+		try:
+			response = requests.get(
+				'https://translate.googleapis.com/translate_a/single',
+				params={
+					'client': 'gtx',
+					'sl': 'auto',
+					'tl': target,
+					'dt': 't',
+					'q': text,
+				},
+				timeout=8,
+			)
+			response.raise_for_status()
+			data = response.json()
+			return ''.join(chunk[0] for chunk in data[0] if chunk and chunk[0]).strip() or text
+		except Exception:
+			return text
+
 
 class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
 	"""
@@ -91,7 +170,14 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			if not self.queryset.exists():
 				language = self.get_language()
 				return self.mock_list_response('schemes', get_mock_schemes(language))
-			return super().list(request, *args, **kwargs)
+			response = super().list(request, *args, **kwargs)
+			localized = self._localize_payload(
+				{'results': response.data},
+				self.get_language(),
+				['name', 'description', 'details', 'benefits', 'how_to_apply', 'documents', 'authority']
+			)
+			response.data = localized.get('results', response.data) if isinstance(localized, dict) else response.data
+			return response
 		except Exception as e:
 			language = self.get_language()
 			mock_data = get_mock_schemes(language)
@@ -99,7 +185,14 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
     
 	def retrieve(self, request, *args, **kwargs):
 		try:
-			return super().retrieve(request, *args, **kwargs)
+			response = super().retrieve(request, *args, **kwargs)
+			localized = self._localize_payload(
+				{'item': response.data},
+				self.get_language(),
+				['name', 'description', 'details', 'benefits', 'how_to_apply', 'documents', 'authority']
+			)
+			response.data = localized.get('item', response.data) if isinstance(localized, dict) else response.data
+			return response
 		except Exception:
 			language = self.get_language()
 			scheme_id = kwargs.get('pk')
@@ -123,7 +216,9 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
 				queryset = self.queryset
             
 			serializer = self.get_serializer(queryset, many=True)
-			return Response({'results': serializer.data, 'source': 'api'})
+			payload = {'results': serializer.data, 'source': 'api'}
+			localized = self._localize_payload(payload, language, ['name', 'description', 'details'])
+			return Response(localized if isinstance(localized, dict) else payload)
         
 		except Exception:
 			language = self.get_language()
@@ -146,13 +241,17 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
 				or 'ALL' in scheme.get('states', [])
 				or any(state in str(s).lower() for s in scheme.get('states', []))
 			]
-		return Response({'schemes': schemes, 'results': schemes, 'source': 'mock' if not self.queryset.exists() else 'api'})
+		payload = {'schemes': schemes, 'results': schemes, 'source': 'mock' if not self.queryset.exists() else 'api'}
+		localized = self._localize_payload(payload, language, ['name', 'description', 'details', 'benefits'])
+		return Response(localized if isinstance(localized, dict) else payload)
 
 	@action(detail=False, methods=['get'])
 	def popular(self, request):
 		language = self.get_language()
 		schemes = get_mock_schemes(language) if not self.queryset.exists() else self.get_serializer(self.queryset[:3], many=True).data
-		return Response({'schemes': schemes[:3], 'results': schemes[:3], 'source': 'mock' if not self.queryset.exists() else 'api'})
+		payload = {'schemes': schemes[:3], 'results': schemes[:3], 'source': 'mock' if not self.queryset.exists() else 'api'}
+		localized = self._localize_payload(payload, language, ['name', 'description', 'details', 'benefits'])
+		return Response(localized if isinstance(localized, dict) else payload)
 
 
 class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
@@ -173,9 +272,15 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 				district = self._district_from_request(request)
 				if state or district:
 					location_data = {'state': state, 'district': district}
-					return Response({'prices': self._fetch_agmarknet_prices(location_data), 'results': self._fetch_agmarknet_prices(location_data), 'source': 'agmarknet'})
+					rows = self._fetch_agmarknet_prices(location_data)
+					payload = {'prices': rows, 'results': rows, 'source': 'agmarknet'}
+					localized = self._localize_payload(payload, language, ['mandi_name', 'crop', 'change', 'unit'])
+					return Response(localized if isinstance(localized, dict) else payload)
 				return self.mock_list_response('prices', get_mock_mandi_prices(language))
-			return super().list(request, *args, **kwargs)
+			response = super().list(request, *args, **kwargs)
+			localized = self._localize_payload({'results': response.data}, language, ['mandi_name', 'state', 'district', 'crop', 'unit'])
+			response.data = localized.get('results', response.data) if isinstance(localized, dict) else response.data
+			return response
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_mandi_prices(language)
@@ -205,7 +310,9 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 				if district:
 					queryset = queryset.filter(district__icontains=district)
 				serializer = self.get_serializer(queryset[:12], many=True)
-				return Response({'mandis': serializer.data, 'source': 'api'})
+				payload = {'mandis': serializer.data, 'source': 'api'}
+				localized = self._localize_payload(payload, self.get_language(), ['mandi_name', 'state', 'district', 'crop', 'unit'])
+				return Response(localized if isinstance(localized, dict) else payload)
 
 			agmarknet_rows = self._fetch_agmarknet_prices({
 				'state': state,
@@ -214,7 +321,9 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 				'longitude': lng,
 			})
 			if agmarknet_rows:
-				return Response({'mandis': agmarknet_rows, 'source': 'agmarknet'})
+				payload = {'mandis': agmarknet_rows, 'source': 'agmarknet'}
+				localized = self._localize_payload(payload, self.get_language(), ['mandi_name', 'state', 'district', 'crop', 'change', 'unit'])
+				return Response(localized if isinstance(localized, dict) else payload)
 			raise APIException('No mandi rows found')
 		except Exception:
 			language = self.get_language()
@@ -303,7 +412,9 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			if loan_type:
 				queryset = queryset.filter(loan_type__iexact=loan_type)
 			serializer = self.get_serializer(queryset, many=True)
-			return Response({'loans': serializer.data, 'results': serializer.data, 'source': 'api'})
+			payload = {'loans': serializer.data, 'results': serializer.data, 'source': 'api'}
+			localized = self._localize_payload(payload, self.get_language(), ['bank_name', 'branch_name', 'loan_type', 'prepayment_policy', 'documents_required', 'address', 'working_hours'])
+			return Response(localized if isinstance(localized, dict) else payload)
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)
@@ -338,7 +449,9 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 
 			serialized.sort(key=lambda x: x.get('distance_km') if x.get('distance_km') is not None else 999999)
 			nearby = [item for item in serialized if item.get('distance_km') is None or item.get('distance_km') <= radius][:8]
-			return Response({'nearby_loans': nearby, 'source': 'api'})
+			payload = {'nearby_loans': nearby, 'source': 'api'}
+			localized = self._localize_payload(payload, self.get_language(), ['bank_name', 'branch_name', 'loan_type', 'prepayment_policy', 'documents_required', 'address', 'working_hours'])
+			return Response(localized if isinstance(localized, dict) else payload)
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)

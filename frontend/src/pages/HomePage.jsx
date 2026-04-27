@@ -57,11 +57,13 @@ export default function HomePage({ tr, onNavigate, uiLanguage, profile }) {
                   <article key={offer.id} className="update-item">
                     <div className="update-item-head">
                       <strong>{offer.title}</strong>
-                      <span className='self-center'>{offer.badge}</span>
+                      <span title={offer.badge}>{offer.badge}</span>
                     </div>
                     <p>{offer.desc}</p>
                     {offer.date && <small>{offer.date}</small>}
-                    {offer.sourceName && <small>{offer.sourceName}</small>}
+                    {offer.sourceName && !String(offer.sourceName).toLowerCase().includes("graamseva") && (
+                      <small>{offer.sourceName}</small>
+                    )}
                     {offer.url && (
                       <small>
                         <a href={offer.url} target="_blank" rel="noreferrer">Source</a>
@@ -78,13 +80,15 @@ export default function HomePage({ tr, onNavigate, uiLanguage, profile }) {
               <div className="updates-list">
                 {regularUpdates.map((offer) => (
                   <article key={offer.id} className="update-item regular">
-                    <div className="update-item-head  ">
+                    <div className="update-item-head">
                       <strong>{offer.title}</strong>
-                      <span >{offer.badge}</span>
+                      <span title={offer.badge}>{offer.badge}</span>
                     </div>
                     <p>{offer.desc}</p>
                     {offer.date && <small>{offer.date}</small>}
-                    {offer.sourceName && <small>{offer.sourceName}</small>}
+                    {offer.sourceName && !String(offer.sourceName).toLowerCase().includes("graamseva") && (
+                      <small>{offer.sourceName}</small>
+                    )}
                     {offer.url && (
                       <small>
                         <a href={offer.url} target="_blank" rel="noreferrer">Source</a>

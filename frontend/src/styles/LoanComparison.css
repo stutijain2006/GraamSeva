@@ -184,3 +184,24 @@
   margin-top: 8px;
 }
 
+.loan-meta-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.loan-meta-chip {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: #efe2c8;
+  font-size: 0.78rem;
+  color: #3f2a1d;
+  line-height: 1.25;
+  white-space: normal;
+  word-break: break-word;
+}
+
