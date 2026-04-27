@@ -19,7 +19,15 @@ class SafeViewMixin:
     
 	def get_language(self):
 		"""Extract language from request"""
-		return self.request.query_params.get('language', 'en')
+		return (
+			self.request.query_params.get('language')
+			or self.request.headers.get('Accept-Language', 'en').split(',')[0].split('-')[0]
+			or 'en'
+		)
+
+	def mock_list_response(self, key, data):
+		"""Return list data in the shape the frontend services already understand."""
+		return Response({key: data, 'results': data, 'source': 'mock'})
     
 	def get_serializer_context(self):
 		"""Add language to serializer context"""
@@ -40,11 +48,14 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
     
 	def list(self, request, *args, **kwargs):
 		try:
+			if not self.queryset.exists():
+				language = self.get_language()
+				return self.mock_list_response('schemes', get_mock_schemes(language))
 			return super().list(request, *args, **kwargs)
 		except Exception as e:
 			language = self.get_language()
 			mock_data = get_mock_schemes(language)
-			return Response({'schemes': mock_data, 'source': 'mock'})
+			return self.mock_list_response('schemes', mock_data)
     
 	def retrieve(self, request, *args, **kwargs):
 		try:
@@ -83,6 +94,26 @@ class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			results = [s for s in mock_data if query in s.get('name', '').lower() or query in s.get('description', '').lower()]
 			return Response({'results': results, 'source': 'mock'})
 
+	@action(detail=False, methods=['get'])
+	def by_state(self, request):
+		state = request.query_params.get('state', '').lower()
+		language = self.get_language()
+		schemes = get_mock_schemes(language) if not self.queryset.exists() else self.get_serializer(self.queryset, many=True).data
+		if state:
+			schemes = [
+				scheme for scheme in schemes
+				if not scheme.get('states')
+				or 'ALL' in scheme.get('states', [])
+				or any(state in str(s).lower() for s in scheme.get('states', []))
+			]
+		return Response({'schemes': schemes, 'results': schemes, 'source': 'mock' if not self.queryset.exists() else 'api'})
+
+	@action(detail=False, methods=['get'])
+	def popular(self, request):
+		language = self.get_language()
+		schemes = get_mock_schemes(language) if not self.queryset.exists() else self.get_serializer(self.queryset[:3], many=True).data
+		return Response({'schemes': schemes[:3], 'results': schemes[:3], 'source': 'mock' if not self.queryset.exists() else 'api'})
+
 
 class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 	"""
@@ -96,11 +127,14 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
     
 	def list(self, request, *args, **kwargs):
 		try:
+			if not self.queryset.exists():
+				language = self.get_language()
+				return self.mock_list_response('prices', get_mock_mandi_prices(language))
 			return super().list(request, *args, **kwargs)
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_mandi_prices(language)
-			return Response({'prices': mock_data, 'source': 'mock'})
+			return self.mock_list_response('prices', mock_data)
     
 	def retrieve(self, request, *args, **kwargs):
 		try:
@@ -126,6 +160,20 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			mock_data = get_mock_mandi_prices(language)
 			return Response({'mandis': mock_data, 'source': 'mock'})
 
+	@action(detail=False, methods=['get'])
+	def by_crop(self, request):
+		crop = request.query_params.get('crop', '').lower()
+		language = self.get_language()
+		prices = get_mock_mandi_prices(language) if not self.queryset.exists() else self.get_serializer(self.queryset, many=True).data
+		match = next(
+			(
+				mandi for mandi in prices
+				if any(crop in str(item.get('crop', '')).lower() for item in mandi.get('crops', []))
+			),
+			prices[0] if prices else {}
+		)
+		return Response(match)
+
 
 class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 	"""
@@ -139,11 +187,14 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
     
 	def list(self, request, *args, **kwargs):
 		try:
+			if not self.queryset.exists():
+				language = self.get_language()
+				return self.mock_list_response('loans', get_mock_loan_options(language))
 			return super().list(request, *args, **kwargs)
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)
-			return Response({'loans': mock_data, 'source': 'mock'})
+			return self.mock_list_response('loans', mock_data)
     
 	def retrieve(self, request, *args, **kwargs):
 		try:
@@ -169,6 +220,25 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)
 			return Response({'nearby_loans': mock_data, 'source': 'mock'})
+
+	@action(detail=False, methods=['post'])
+	def calculate(self, request):
+		amount = float(request.data.get('amount', 0) or 0)
+		interest = float(request.data.get('interest', 0) or 0)
+		tenure = int(request.data.get('tenure', 0) or 0)
+		if amount <= 0 or interest <= 0 or tenure <= 0:
+			return Response({'emi': 0, 'totalAmount': amount, 'totalInterest': 0})
+		monthly_rate = (interest / 100) / 12
+		emi = (amount * monthly_rate * ((1 + monthly_rate) ** tenure)) / (((1 + monthly_rate) ** tenure) - 1)
+		total_amount = emi * tenure
+		return Response({
+			'emi': round(emi),
+			'totalAmount': round(total_amount),
+			'totalInterest': round(total_amount - amount),
+			'principal': amount,
+			'tenure': tenure,
+			'interest': interest,
+		})
 
 
 class EligibilityViewSet(SafeViewMixin, viewsets.ModelViewSet):
@@ -204,6 +274,17 @@ class EligibilityViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			language = self.get_language()
 			mock_data = get_mock_eligibility(language)
 			return Response({'eligible': True, 'message': 'Eligible', 'source': 'mock'})
+
+	@action(detail=False, methods=['get'])
+	def criteria(self, request):
+		language = self.get_language()
+		scheme_id = str(request.query_params.get('scheme_id', '1'))
+		mock_data = get_mock_eligibility(language).get(scheme_id, {})
+		return Response(mock_data)
+
+	@action(detail=False, methods=['post'])
+	def verify(self, request):
+		return Response({'verified': True, 'issues': [], 'message': 'Eligibility verified', 'source': 'api'})
     
 	def _check_eligibility(self, eligibility, farmer_data):
 		"""Check farmer against eligibility criteria"""
@@ -225,9 +306,10 @@ class ApplicationViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			return super().create(request, *args, **kwargs)
 		except Exception:
 			language = self.get_language()
-			application_id = f"APP-{request.data.get('scheme_id', 0)}-{id(request)}"
+			application_id = f"APP-{request.data.get('scheme_id') or request.data.get('schemeId', 0)}-{id(request)}"
 			return Response({
 				'application_id': application_id,
+				'referenceId': application_id,
 				'status': 'SUBMITTED',
 				'message': 'Application submitted',
 				'source': 'mock'
@@ -273,8 +355,19 @@ class DashboardViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			language = self.get_language()
 			mock_data = get_mock_dashboard(language)
 			return Response({'data': mock_data, 'source': 'mock'})
-        
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_dashboard(language)
 			return Response({'data': mock_data, 'source': 'mock'})
+
+	@action(detail=False, methods=['get'])
+	def activities(self, request):
+		language = self.get_language()
+		mock_data = get_mock_dashboard(language)
+		return Response({'activities': mock_data.get('recent_applications', []), 'source': 'mock'})
+
+	@action(detail=False, methods=['get'])
+	def chart_data(self, request):
+		metric = request.query_params.get('metric', 'applications')
+		mock_data = get_mock_dashboard(self.get_language())
+		return Response({'metric': metric, 'data': mock_data.get('recent_applications', []), 'source': 'mock'})

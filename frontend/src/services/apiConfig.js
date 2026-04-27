@@ -11,14 +11,7 @@ const DEFAULT_PROD_BASE_URL = 'https://api.graamseva.in'
 
 export const API_CONFIG = {
   // Main API Base URL
-  BASE_URL:
-    import.meta.env.VITE_API_BASE_URL ||
-    (import.meta.env.MODE === 'development' ? DEFAULT_DEV_BASE_URL : DEFAULT_PROD_BASE_URL),
-
-  // Prefix added to legacy /api/* endpoints (useful for local Django /api/v1/* routes)
-  API_PREFIX:
-    import.meta.env.VITE_API_PREFIX ||
-    (import.meta.env.MODE === 'development' ? '/api/v1' : ''),
+  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
 
   // Timeout for API calls (ms)
   TIMEOUT: 10000,
@@ -31,38 +24,38 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Voice & Speech
   SPEECH: {
-    TRANSCRIBE: '/api/voice/transcripts/',
-    TTS: '/api/voice/agent/chat/',
+    TRANSCRIBE: '/api/v1/voice/transcripts/',
+    TTS: '/api/v1/voice/agent/tts/',
   },
 
   // Intent & Routing
   INTENT: {
-    ROUTE: '/api/intent/route',
-    CLASSIFY: '/api/intent/classify',
+    ROUTE: '/api/v1/voice/agent/chat/',
+    CLASSIFY: '/api/v1/voice/agent/chat/',
   },
 
   // Schemes
   SCHEMES: {
-    LIST: '/api/schemes/',
-    GET_BY_ID: '/api/schemes/:id/',
-    SEARCH: '/api/schemes/search/',
-    BY_STATE: '/api/schemes/',
-    POPULAR: '/api/schemes/',
+    LIST: '/api/v1/schemes/',
+    GET_BY_ID: '/api/v1/schemes/:id/',
+    SEARCH: '/api/v1/schemes/search/',
+    BY_STATE: '/api/v1/schemes/by_state/',
+    POPULAR: '/api/v1/schemes/popular/',
   },
 
   // Eligibility
   ELIGIBILITY: {
-    CHECK: '/api/eligibility/check/',
-    GET_CRITERIA: '/api/eligibility/',
-    VERIFY: '/api/eligibility/check/',
+    CHECK: '/api/v1/eligibility/check/',
+    GET_CRITERIA: '/api/v1/eligibility/criteria/',
+    VERIFY: '/api/v1/eligibility/verify/',
   },
 
   // Applications
   APPLICATIONS: {
-    SUBMIT: '/api/applications/',
-    GET_STATUS: '/api/applications/:referenceId/',
-    LIST: '/api/applications/',
-    TRACK: '/api/applications/:referenceId/',
+    SUBMIT: '/api/v1/applications/',
+    GET_STATUS: '/api/v1/applications/:referenceId/',
+    LIST: '/api/v1/applications/',
+    TRACK: '/api/v1/applications/:referenceId/',
   },
 
   // Authentication
@@ -75,9 +68,9 @@ export const API_ENDPOINTS = {
 
   // Dashboard & Analytics
   DASHBOARD: {
-    STATS: '/api/dashboard/stats/',
-    ACTIVITIES: '/api/dashboard/stats/',
-    CHART_DATA: '/api/dashboard/stats/',
+    STATS: '/api/v1/dashboard/stats/',
+    ACTIVITIES: '/api/v1/dashboard/activities/',
+    CHART_DATA: '/api/v1/dashboard/chart_data/',
     LIVE_UPDATES: '/ws/dashboard/live',
   },
 
@@ -101,17 +94,27 @@ export const API_ENDPOINTS = {
 
   // Miscellaneous
   MISC: {
-    MANDI_PRICES: '/api/mandi/prices',
+    MANDI_PRICES: '/api/v1/mandi/',
     WEATHER: '/api/weather/village/:villageCode',
     COLD_STORAGE: '/api/cold-storage/nearby',
   },
   NEW_SCHEMES: {
-    LIST: '/api/schemes/',
-    GET_BY_ID: '/api/schemes/:id/',
+    LIST: '/api/v1/schemes/',
+    GET_BY_ID: '/api/v1/schemes/:id/',
+  },
+  MANDI: {
+    LIST: '/api/v1/mandi/',
+    GET_CROP: '/api/v1/mandi/by_crop/',
+  },
+  LOANS: {
+    LIST: '/api/v1/loans/',
+    NEARBY: '/api/v1/loans/nearby/',
+    CALCULATE: '/api/v1/loans/calculate/',
   },
   AI: {
-    HOME_UPDATES: '/api/schemes/search/',
-    NEARBY_LOANS: '/api/loans/nearby/',
+    CHAT: '/api/v1/voice/agent/chat/',
+    HOME_UPDATES: '/api/v1/voice/agent/home_updates/',
+    NEARBY_LOANS: '/api/v1/voice/agent/nearby_loans/',
   },
 }
 

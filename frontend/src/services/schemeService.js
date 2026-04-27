@@ -7,26 +7,8 @@ import { API_ENDPOINTS, buildURL } from './apiConfig'
 import { getMockSchemes, getMockSchemeById, getMockLatestOffers } from './mockData'
 import apiClient from './apiClient'
 
-const normalizeScheme = (item = {}) => ({
-  id: item.id ?? item.scheme_id,
-  scheme_id: item.scheme_id ?? item.id,
-  name: item.name || item.title || 'Scheme',
-  icon: item.icon || '🌾',
-  desc: item.desc || item.description || item.details || '',
-  detail: item.detail || item.details || item.description || '',
-  governmentLevel: item.governmentLevel || item.government_level || 'Government',
-  states: Array.isArray(item.states) ? item.states : [],
-  benefits: Array.isArray(item.benefits) ? item.benefits : [],
-  howToApply: item.howToApply || item.how_to_apply || [],
-  documents: item.documents || item.documents_required || [],
-  eligibility: item.eligibility || {},
-  authority: item.authority || {},
-})
-
-const normalizeSchemeList = (response) => {
-  const raw = (Array.isArray(response) && response) || response?.schemes || response?.results || []
-  return raw.map(normalizeScheme)
-}
+const asList = (response, key) =>
+  response?.[key] || response?.results || response?.data || (Array.isArray(response) ? response : [])
 
 class SchemeService {
   /**
@@ -45,8 +27,8 @@ class SchemeService {
 
       console.log('Schemes fetched successfully:', response)
       return {
-        data: normalizeSchemeList(response),
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Schemes API failed, using mock data:', error.message)
@@ -131,9 +113,10 @@ class SchemeService {
     try {
       console.log(`Fetching schemes for state: ${state}`)
 
-      const url = buildURL(API_ENDPOINTS.SCHEMES.BY_STATE.replace(':state', state))
+      const url = buildURL(API_ENDPOINTS.SCHEMES.BY_STATE)
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
+        params: { state },
       })
 
       const normalizedState = String(state || '').trim().toLowerCase()
@@ -153,8 +136,8 @@ class SchemeService {
       })
 
       return {
-        data: filtered,
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn(`State schemes API failed for ${state}, using mock data:`, error.message)
@@ -200,8 +183,8 @@ class SchemeService {
       const items = normalizeSchemeList(response)
 
       return {
-        data: items.slice(0, 3),
-        source: 'api',
+        data: asList(response, 'schemes'),
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Popular schemes API failed, using mock data:', error.message)
@@ -228,10 +211,10 @@ class SchemeService {
         headers: { 'Accept-Language': language },
       })
 
-      const items = normalizeSchemeList(response)
+      const items = asList(response, 'schemes')
       return {
         data: items.slice(0, limit),
-        source: 'api',
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Latest schemes API failed, using mock data:', error.message)

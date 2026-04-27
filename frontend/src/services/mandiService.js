@@ -57,8 +57,8 @@ class MandiService {
 
       console.log('Mandi prices fetched successfully:', response)
       return {
-        data: normalizeMandiList(response),
-        source: 'api',
+        data: response.prices || response.results || response.data || response,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Mandi API failed, using mock data:', error.message)
@@ -80,9 +80,10 @@ class MandiService {
     try {
       console.log(`Fetching price for ${cropName} from API...`)
 
-      const url = buildURL(API_ENDPOINTS.MANDI.LIST)
+      const url = buildURL(API_ENDPOINTS.MANDI?.GET_CROP || '/api/v1/mandi/by_crop/')
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
+        params: { crop: cropName },
       })
       const list = normalizeMandiList(response)
       const match = list.find((mandi) =>

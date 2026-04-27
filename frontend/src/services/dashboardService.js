@@ -59,16 +59,13 @@ class DashboardService {
       console.log('Fetching dashboard stats from API...')
       
       const url = buildURL(API_ENDPOINTS.DASHBOARD.STATS)
-      const response = await apiClient.get(url, {
-        headers: { 'Accept-Language': filters?.language || 'hi' },
-      })
-      const normalized = normalizeDashboardStats(response)
+      const response = await apiClient.get(url, { params: filters })
 
       console.log('Dashboard stats fetched:', response)
       
       return {
-        data: normalized,
-        source: 'api',
+        data: response.data || response,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Dashboard stats API failed, using mock data:', error.message)
@@ -90,8 +87,7 @@ class DashboardService {
       console.log('Fetching recent activities...')
       
       const url = buildURL(API_ENDPOINTS.DASHBOARD.ACTIVITIES)
-      const response = await apiClient.get(url)
-      const stats = normalizeDashboardStats(response)
+      const response = await apiClient.get(url, { params: options })
 
       return {
         data: stats.recentActivities,
@@ -118,17 +114,9 @@ class DashboardService {
       console.log(`Fetching chart data for metric: ${metric}`)
       
       const url = buildURL(
-        API_ENDPOINTS.DASHBOARD.CHART_DATA.replace(':metric', metric)
+        API_ENDPOINTS.DASHBOARD.CHART_DATA
       )
-      const response = await apiClient.get(url)
-      const stats = normalizeDashboardStats(response)
-
-      if (metric === 'language') {
-        return {
-          data: stats.languageBreakdown,
-          source: 'api',
-        }
-      }
+      const response = await apiClient.get(url, { params: { ...filters, metric } })
 
       return {
         data: stats.recentActivities,
@@ -163,8 +151,8 @@ class DashboardService {
   subscribeToLiveUpdates(onUpdate) {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const apiHost = new URL(API_CONFIG.BASE_URL).host
-      const url = `${protocol}//${apiHost}${API_ENDPOINTS.DASHBOARD.LIVE_UPDATES}`
+      const apiUrl = new URL(API_CONFIG.BASE_URL)
+      const url = `${protocol}//${apiUrl.host}${API_ENDPOINTS.DASHBOARD.LIVE_UPDATES}`
       
       console.log('Connecting to live updates...')
       const ws = new WebSocket(url)

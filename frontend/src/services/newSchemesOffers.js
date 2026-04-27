@@ -3,8 +3,31 @@
  */
 
 import { API_ENDPOINTS, buildURL } from './apiConfig'
-import { getMockLatestOffers } from './mockData'
 import apiClient from './apiClient'
+
+const cacheKey = (language) => `graamseva_home_updates_${language}`
+
+function readCachedUpdates(language) {
+  try {
+    const raw = localStorage.getItem(cacheKey(language))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed?.data) ? parsed.data : []
+  } catch {
+    return []
+  }
+}
+
+function writeCachedUpdates(language, data) {
+  try {
+    localStorage.setItem(cacheKey(language), JSON.stringify({
+      data,
+      savedAt: new Date().toISOString(),
+    }))
+  } catch {
+    // Ignore storage failures; live API remains the source of truth.
+  }
+}
 
 function normalizeUpdateItem(item, index) {
   const governmentLevel = item.governmentLevel || item.government_level || 'Government'
@@ -16,6 +39,7 @@ function normalizeUpdateItem(item, index) {
     date: item.date || item.publishedAt || item.published_on || item.updated_at || '',
     type: item.type || item.updateType || 'update',
     url: item.url || item.link || null,
+    sourceName: item.sourceName || item.source_name || item.source || '',
   }
 }
 
@@ -39,54 +63,52 @@ class NewSchemesOffersService {
     try {
       console.log('Fetching latest scheme updates from API...')
 
-      const url = buildURL(API_ENDPOINTS.NEW_SCHEMES.LIST)
-      const response = await apiClient.get(url, {
-        headers: { 'Accept-Language': language },
-      })
+      const aiUrl = buildURL(API_ENDPOINTS.AI.HOME_UPDATES)
+      const aiResponse = await apiClient.post(
+        aiUrl,
+        {
+          language,
+          maxItems: 10,
+          scope: 'india',
+          audience: 'farmers',
+          topic: 'recent government schemes and policy updates for farmers relevant to GraamSeva users',
+          currentDate: new Date().toISOString().slice(0, 10),
+          profile: {
+            name: profile?.name || null,
+            mobile: profile?.mobile || null,
+            language: profile?.language || language,
+          },
+          location,
+        },
+        {
+          headers: { 'Accept-Language': language },
+          timeout: 45000,
+        },
+      )
 
       const normalized = normalizeResponse(response)
       if (normalized.length > 0) {
+        writeCachedUpdates(language, normalized)
         return {
           data: normalized,
-          source: 'api',
+          source: aiResponse.source || 'verified-government-sources',
+          lastFetched: aiResponse.lastFetched || null,
+          refreshAfterSeconds: aiResponse.refreshAfterSeconds || null,
         }
       }
 
-      throw new Error('No items in updates response')
-    } catch (primaryError) {
-      console.warn('Primary updates API failed, trying search fallback:', primaryError.message)
+      return {
+        data: readCachedUpdates(language),
+        source: aiResponse.source || 'verified-government-sources',
+        lastFetched: aiResponse.lastFetched || null,
+        refreshAfterSeconds: aiResponse.refreshAfterSeconds || null,
+      }
+    } catch (aiError) {
+      console.warn('Verified government updates API failed:', aiError.message)
 
-      try {
-        const aiUrl = buildURL(API_ENDPOINTS.AI.HOME_UPDATES)
-        const aiResponse = await apiClient.post(
-          aiUrl,
-          {
-            query: 'latest schemes farmers',
-            language,
-            profile: {
-              name: profile?.name || null,
-              mobile: profile?.mobile || null,
-              language: profile?.language || language,
-            },
-            location,
-          },
-          {
-            headers: { 'Accept-Language': language },
-          },
-        )
-
-        const normalized = normalizeResponse(aiResponse)
-        return {
-          data: normalized,
-          source: 'api',
-        }
-      } catch (error) {
-        console.warn('New schemes API failed, using mock data:', error.message)
-
-        return {
-          data: getMockLatestOffers(language),
-          source: 'mock',
-        }
+      return {
+        data: readCachedUpdates(language),
+        source: 'unavailable',
       }
     }
   }

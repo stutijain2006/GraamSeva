@@ -43,22 +43,15 @@ class ApplicationService {
       const url = buildURL(API_ENDPOINTS.APPLICATIONS.SUBMIT)
       const now = new Date().toISOString()
       const payload = {
-        application_id: applicationData?.applicationId || `APP-${Date.now()}`,
-        scheme_id: applicationData?.schemeId,
-        farmer_name: applicationData?.userProfile?.name || 'Farmer',
-        farmer_phone:
-          applicationData?.userProfile?.mobile ||
-          applicationData?.userProfile?.phone ||
-          applicationData?.userProfile?.phoneNumber ||
-          '0000000000',
-        farmer_aadhar:
-          applicationData?.userProfile?.aadhaar || applicationData?.userProfile?.aadhar || null,
-        status: 'SUBMITTED',
-        submitted_at: now,
-        application_data: {
-          ...applicationData,
-          language,
-        },
+        application_id: applicationData.application_id || `APP-${Date.now()}`,
+        scheme_id: applicationData.scheme_id || applicationData.schemeId || 0,
+        farmer_name: applicationData.farmer_name || applicationData.fullName || applicationData.name || 'GraamSeva User',
+        farmer_phone: applicationData.farmer_phone || applicationData.mobile || applicationData.phone || '0000000000',
+        farmer_aadhar: applicationData.farmer_aadhar || applicationData.aadhaar || applicationData.aadhar || null,
+        status: applicationData.isDraft ? 'DRAFT' : 'SUBMITTED',
+        application_data: applicationData,
+        language,
+        submittedAt: new Date().toISOString(),
       }
 
       const response = await apiClient.post(url, payload)
@@ -68,13 +61,9 @@ class ApplicationService {
       
       return {
         success: true,
-        data: {
-          ...normalized,
-          expectedApprovalTime: '7-15 days',
-          nextSteps: defaultNextSteps,
-        },
-        referenceId: normalized.referenceId,
-        source: 'api',
+        data: response,
+        referenceId: response.referenceId || response.application_id,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn('Application submission API failed, using mock response:', error.message)
@@ -136,15 +125,11 @@ class ApplicationService {
       console.log(`Fetching applications for user: ${userId}`)
       
       const url = buildURL(API_ENDPOINTS.APPLICATIONS.LIST)
-      const response = await apiClient.get(url)
-      const raw = (Array.isArray(response) && response) || response.applications || []
-      const data = raw
-        .map(normalizeApplication)
-        .filter((app) => !userId || String(app.farmerName || '').includes(String(userId)))
+      const response = await apiClient.get(url, { params: { user_id: userId } })
 
       return {
-        data,
-        source: 'api',
+        data: response.applications || response.results || response,
+        source: response.source || 'api',
       }
     } catch (error) {
       console.warn(`User applications API failed, returning empty array:`, error.message)

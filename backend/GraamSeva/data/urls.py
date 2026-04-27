@@ -1,12 +1,12 @@
 from django.urls import path, include
-from rest_framework.routers import DefaultRouter
+from rest_framework.routers import SimpleRouter
 from .views import (
     SchemeViewSet, MandiPriceViewSet, LoanOptionViewSet,
     EligibilityViewSet, ApplicationViewSet, DashboardViewSet
 )
 
 # Create router and register viewsets
-router = DefaultRouter()
+router = SimpleRouter()
 router.register(r'schemes', SchemeViewSet, basename='scheme')
 router.register(r'mandi', MandiPriceViewSet, basename='mandi')
 router.register(r'loans', LoanOptionViewSet, basename='loan')
