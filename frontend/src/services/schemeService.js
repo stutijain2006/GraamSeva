@@ -7,6 +7,27 @@ import { API_ENDPOINTS, buildURL } from './apiConfig'
 import { getMockSchemes, getMockSchemeById, getMockLatestOffers } from './mockData'
 import apiClient from './apiClient'
 
+const normalizeScheme = (item = {}) => ({
+  id: item.id ?? item.scheme_id,
+  scheme_id: item.scheme_id ?? item.id,
+  name: item.name || item.title || 'Scheme',
+  icon: item.icon || '🌾',
+  desc: item.desc || item.description || item.details || '',
+  detail: item.detail || item.details || item.description || '',
+  governmentLevel: item.governmentLevel || item.government_level || 'Government',
+  states: Array.isArray(item.states) ? item.states : [],
+  benefits: Array.isArray(item.benefits) ? item.benefits : [],
+  howToApply: item.howToApply || item.how_to_apply || [],
+  documents: item.documents || item.documents_required || [],
+  eligibility: item.eligibility || {},
+  authority: item.authority || {},
+})
+
+const normalizeSchemeList = (response) => {
+  const raw = (Array.isArray(response) && response) || response?.schemes || response?.results || []
+  return raw.map(normalizeScheme)
+}
+
 class SchemeService {
   /**
    * Get all schemes
@@ -24,7 +45,7 @@ class SchemeService {
 
       console.log('Schemes fetched successfully:', response)
       return {
-        data: response.schemes || response,
+        data: normalizeSchemeList(response),
         source: 'api',
       }
     } catch (error) {
@@ -53,7 +74,7 @@ class SchemeService {
       })
 
       return {
-        data: response,
+        data: normalizeScheme(response),
         source: 'api',
       }
     } catch (error) {
@@ -80,7 +101,7 @@ class SchemeService {
       const response = await apiClient.post(url, { query, language })
 
       return {
-        data: response.results || response,
+        data: normalizeSchemeList(response),
         source: 'api',
       }
     } catch (error) {
@@ -115,8 +136,24 @@ class SchemeService {
         headers: { 'Accept-Language': language },
       })
 
+      const normalizedState = String(state || '').trim().toLowerCase()
+      const filtered = normalizeSchemeList(response).filter((scheme) => {
+        if (!Array.isArray(scheme.states) || scheme.states.length === 0) return true
+
+        const normalizedSchemeStates = scheme.states.map((s) => String(s || '').toLowerCase())
+        return (
+          normalizedSchemeStates.includes('all') ||
+          normalizedSchemeStates.some(
+            (schemeState) =>
+              schemeState === normalizedState ||
+              schemeState.includes(normalizedState) ||
+              normalizedState.includes(schemeState),
+          )
+        )
+      })
+
       return {
-        data: response.schemes || response,
+        data: filtered,
         source: 'api',
       }
     } catch (error) {
@@ -160,8 +197,10 @@ class SchemeService {
         headers: { 'Accept-Language': language },
       })
 
+      const items = normalizeSchemeList(response)
+
       return {
-        data: response.schemes || response,
+        data: items.slice(0, 3),
         source: 'api',
       }
     } catch (error) {
@@ -189,7 +228,7 @@ class SchemeService {
         headers: { 'Accept-Language': language },
       })
 
-      const items = response.schemes || response || []
+      const items = normalizeSchemeList(response)
       return {
         data: items.slice(0, limit),
         source: 'api',

@@ -6,9 +6,19 @@
 
 // ============================================
 // API BASE URLS
+const DEFAULT_DEV_BASE_URL = 'http://127.0.0.1:8000'
+const DEFAULT_PROD_BASE_URL = 'https://api.graamseva.in'
+
 export const API_CONFIG = {
   // Main API Base URL
-  BASE_URL: import.meta.env.VITE_API_BASE_URL || 'https://api.graamseva.in',
+  BASE_URL:
+    import.meta.env.VITE_API_BASE_URL ||
+    (import.meta.env.MODE === 'development' ? DEFAULT_DEV_BASE_URL : DEFAULT_PROD_BASE_URL),
+
+  // Prefix added to legacy /api/* endpoints (useful for local Django /api/v1/* routes)
+  API_PREFIX:
+    import.meta.env.VITE_API_PREFIX ||
+    (import.meta.env.MODE === 'development' ? '/api/v1' : ''),
 
   // Timeout for API calls (ms)
   TIMEOUT: 10000,
@@ -21,8 +31,8 @@ export const API_CONFIG = {
 export const API_ENDPOINTS = {
   // Voice & Speech
   SPEECH: {
-    TRANSCRIBE: '/api/speech/transcribe',
-    TTS: '/api/speech/tts',
+    TRANSCRIBE: '/api/voice/transcripts/',
+    TTS: '/api/voice/agent/chat/',
   },
 
   // Intent & Routing
@@ -33,26 +43,26 @@ export const API_ENDPOINTS = {
 
   // Schemes
   SCHEMES: {
-    LIST: '/api/schemes',
-    GET_BY_ID: '/api/schemes/:id',
-    SEARCH: '/api/schemes/search',
-    BY_STATE: '/api/schemes/state/:state',
-    POPULAR: '/api/schemes/popular',
+    LIST: '/api/schemes/',
+    GET_BY_ID: '/api/schemes/:id/',
+    SEARCH: '/api/schemes/search/',
+    BY_STATE: '/api/schemes/',
+    POPULAR: '/api/schemes/',
   },
 
   // Eligibility
   ELIGIBILITY: {
-    CHECK: '/api/eligibility/check',
-    GET_CRITERIA: '/api/eligibility/criteria/:schemeId',
-    VERIFY: '/api/eligibility/verify',
+    CHECK: '/api/eligibility/check/',
+    GET_CRITERIA: '/api/eligibility/',
+    VERIFY: '/api/eligibility/check/',
   },
 
   // Applications
   APPLICATIONS: {
-    SUBMIT: '/api/applications/submit',
-    GET_STATUS: '/api/applications/:referenceId',
-    LIST: '/api/applications/user/:userId',
-    TRACK: '/api/applications/track/:referenceId',
+    SUBMIT: '/api/applications/',
+    GET_STATUS: '/api/applications/:referenceId/',
+    LIST: '/api/applications/',
+    TRACK: '/api/applications/:referenceId/',
   },
 
   // Authentication
@@ -65,10 +75,21 @@ export const API_ENDPOINTS = {
 
   // Dashboard & Analytics
   DASHBOARD: {
-    STATS: '/api/dashboard/stats',
-    ACTIVITIES: '/api/dashboard/activities',
-    CHART_DATA: '/api/dashboard/chart/:metric',
+    STATS: '/api/dashboard/stats/',
+    ACTIVITIES: '/api/dashboard/stats/',
+    CHART_DATA: '/api/dashboard/stats/',
     LIVE_UPDATES: '/ws/dashboard/live',
+  },
+
+  MANDI: {
+    LIST: '/api/mandi/',
+    GET_CROP: '/api/mandi/:id/',
+  },
+
+  LOANS: {
+    LIST: '/api/loans/',
+    NEARBY: '/api/loans/nearby/',
+    CALCULATE: '/api/loans/calculate/',
   },
 
   // User Profile
@@ -85,12 +106,12 @@ export const API_ENDPOINTS = {
     COLD_STORAGE: '/api/cold-storage/nearby',
   },
   NEW_SCHEMES: {
-    LIST: '/api/new-schemes',
-    GET_BY_ID: '/api/new-schemes/:id',
+    LIST: '/api/schemes/',
+    GET_BY_ID: '/api/schemes/:id/',
   },
   AI: {
-    HOME_UPDATES: '/api/ai/home-updates',
-    NEARBY_LOANS: '/api/ai/nearby-loans',
+    HOME_UPDATES: '/api/schemes/search/',
+    NEARBY_LOANS: '/api/loans/nearby/',
   },
 }
 
@@ -102,7 +123,13 @@ export const API_ENDPOINTS = {
  * Build full URL from endpoint
  */
 export const buildURL = (endpoint, params = {}) => {
-  let url = `${API_CONFIG.BASE_URL}${endpoint}`
+  let normalizedEndpoint = endpoint
+
+  if (API_CONFIG.API_PREFIX) {
+    normalizedEndpoint = endpoint.replace(/^\/api(\/|$)/, `${API_CONFIG.API_PREFIX}$1`)
+  }
+
+  let url = `${API_CONFIG.BASE_URL}${normalizedEndpoint}`
 
   // Replace URL parameters
   Object.entries(params).forEach(([key, value]) => {

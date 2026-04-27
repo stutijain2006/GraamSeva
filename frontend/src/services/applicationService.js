@@ -7,6 +7,28 @@ import { API_ENDPOINTS, buildURL } from './apiConfig'
 import { MOCK_APPLICATION_RESPONSE } from './mockData'
 import apiClient from './apiClient'
 
+const defaultNextSteps = [
+  'Your application has been submitted.',
+  'Verification will begin shortly.',
+  'You will be notified of status updates.',
+]
+
+const toIsoDate = (value) => {
+  const parsed = value ? new Date(value) : null
+  return parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString()
+}
+
+const toReferenceId = (item = {}) => item.application_id || item.referenceId || item.id || null
+
+const normalizeApplication = (item = {}) => ({
+  referenceId: toReferenceId(item),
+  status: item.status || 'SUBMITTED',
+  farmerName: item.farmer_name || item.farmerName || '',
+  schemeId: item.scheme_id || item.schemeId || null,
+  submittedAt: item.submitted_at || item.submittedAt || item.created_at || new Date().toISOString(),
+  applicationData: item.application_data || item.applicationData || {},
+})
+
 class ApplicationService {
   /**
    * Submit application
@@ -19,20 +41,39 @@ class ApplicationService {
       console.log('Submitting application to API...')
       
       const url = buildURL(API_ENDPOINTS.APPLICATIONS.SUBMIT)
+      const now = new Date().toISOString()
       const payload = {
-        ...applicationData,
-        language,
-        submittedAt: new Date().toISOString(),
+        application_id: applicationData?.applicationId || `APP-${Date.now()}`,
+        scheme_id: applicationData?.schemeId,
+        farmer_name: applicationData?.userProfile?.name || 'Farmer',
+        farmer_phone:
+          applicationData?.userProfile?.mobile ||
+          applicationData?.userProfile?.phone ||
+          applicationData?.userProfile?.phoneNumber ||
+          '0000000000',
+        farmer_aadhar:
+          applicationData?.userProfile?.aadhaar || applicationData?.userProfile?.aadhar || null,
+        status: 'SUBMITTED',
+        submitted_at: now,
+        application_data: {
+          ...applicationData,
+          language,
+        },
       }
 
       const response = await apiClient.post(url, payload)
+      const normalized = normalizeApplication(response)
 
       console.log('Application submitted successfully:', response)
       
       return {
         success: true,
-        data: response,
-        referenceId: response.referenceId,
+        data: {
+          ...normalized,
+          expectedApprovalTime: '7-15 days',
+          nextSteps: defaultNextSteps,
+        },
+        referenceId: normalized.referenceId,
         source: 'api',
       }
     } catch (error) {
@@ -60,9 +101,14 @@ class ApplicationService {
         API_ENDPOINTS.APPLICATIONS.GET_STATUS.replace(':referenceId', referenceId)
       )
       const response = await apiClient.get(url)
+      const normalized = normalizeApplication(response)
 
       return {
-        data: response,
+        data: {
+          ...normalized,
+          lastUpdated: toIsoDate(response.updated_at || response.updatedAt),
+          estimatedCompletion: '7-15 days',
+        },
         source: 'api',
       }
     } catch (error) {
@@ -89,13 +135,15 @@ class ApplicationService {
     try {
       console.log(`Fetching applications for user: ${userId}`)
       
-      const url = buildURL(
-        API_ENDPOINTS.APPLICATIONS.LIST.replace(':userId', userId)
-      )
+      const url = buildURL(API_ENDPOINTS.APPLICATIONS.LIST)
       const response = await apiClient.get(url)
+      const raw = (Array.isArray(response) && response) || response.applications || []
+      const data = raw
+        .map(normalizeApplication)
+        .filter((app) => !userId || String(app.farmerName || '').includes(String(userId)))
 
       return {
-        data: response.applications || response,
+        data,
         source: 'api',
       }
     } catch (error) {
@@ -121,9 +169,25 @@ class ApplicationService {
         API_ENDPOINTS.APPLICATIONS.TRACK.replace(':referenceId', referenceId)
       )
       const response = await apiClient.get(url)
+      const normalized = normalizeApplication(response)
 
       return {
-        data: response,
+        data: {
+          referenceId: normalized.referenceId,
+          status: normalized.status,
+          timeline: [
+            { step: 'Application Received', date: normalized.submittedAt },
+            {
+              step: 'Under Review',
+              date: normalized.status === 'UNDER_REVIEW' || normalized.status === 'APPROVED' ? toIsoDate(response.updated_at) : null,
+            },
+            {
+              step: 'Approved',
+              date: normalized.status === 'APPROVED' ? toIsoDate(response.updated_at) : null,
+            },
+            { step: 'Amount Transferred', date: null },
+          ],
+        },
         source: 'api',
       }
     } catch (error) {

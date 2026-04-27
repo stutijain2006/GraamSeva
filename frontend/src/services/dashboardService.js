@@ -3,9 +3,50 @@
  * Handles dashboard data and analytics
  */
 
-import { API_ENDPOINTS, buildURL } from './apiConfig'
+import { API_CONFIG, API_ENDPOINTS, buildURL } from './apiConfig'
 import { MOCK_DASHBOARD_STATS } from './mockData'
 import apiClient from './apiClient'
+
+const formatAmount = (value) => {
+  if (typeof value === 'string' && value.trim()) return value
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '₹0'
+  return `₹${numeric.toLocaleString('en-IN')}`
+}
+
+const normalizeActivityStatus = (status) => {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'APPROVED') return 'Approved'
+  if (normalized === 'UNDER_REVIEW' || normalized === 'PROCESSING') return 'Processing'
+  if (normalized === 'SUBMITTED' || normalized === 'PENDING') return 'Pending'
+  if (normalized === 'REJECTED') return 'Rejected'
+  return 'Pending'
+}
+
+const normalizeActivities = (items = []) =>
+  items.map((item, index) => ({
+    id: item.id || item.application_id || `activity-${index + 1}`,
+    name: item.name || item.farmer_name || 'Farmer',
+    scheme: item.scheme || item.scheme_name || `Scheme ${item.scheme_id || '-'}`,
+    status: normalizeActivityStatus(item.status),
+    amount: item.amount || '-',
+    date: item.date || item.created_at || item.updated_at || 'Recently',
+  }))
+
+const normalizeDashboardStats = (response) => {
+  const payload = response?.data || response || {}
+  const recentApplications = payload.recent_applications || payload.recentApplications || []
+
+  return {
+    todaysCalls: payload.todaysCalls || payload.total_calls || payload.total_farmers_benefited || 0,
+    applicationsProcessed:
+      payload.applicationsProcessed || payload.total_applications || recentApplications.length || 0,
+    amountUnlocked: payload.amountUnlocked || formatAmount(payload.total_farmers_benefited || 0),
+    approvalRate: payload.approvalRate || payload.approval_rate || 'N/A',
+    languageBreakdown: payload.languageBreakdown || [],
+    recentActivities: normalizeActivities(recentApplications),
+  }
+}
 
 class DashboardService {
   /**
@@ -18,12 +59,15 @@ class DashboardService {
       console.log('Fetching dashboard stats from API...')
       
       const url = buildURL(API_ENDPOINTS.DASHBOARD.STATS)
-      const response = await apiClient.post(url, filters)
+      const response = await apiClient.get(url, {
+        headers: { 'Accept-Language': filters?.language || 'hi' },
+      })
+      const normalized = normalizeDashboardStats(response)
 
       console.log('Dashboard stats fetched:', response)
       
       return {
-        data: response,
+        data: normalized,
         source: 'api',
       }
     } catch (error) {
@@ -46,10 +90,11 @@ class DashboardService {
       console.log('Fetching recent activities...')
       
       const url = buildURL(API_ENDPOINTS.DASHBOARD.ACTIVITIES)
-      const response = await apiClient.post(url, options)
+      const response = await apiClient.get(url)
+      const stats = normalizeDashboardStats(response)
 
       return {
-        data: response.activities || response,
+        data: stats.recentActivities,
         source: 'api',
       }
     } catch (error) {
@@ -75,10 +120,18 @@ class DashboardService {
       const url = buildURL(
         API_ENDPOINTS.DASHBOARD.CHART_DATA.replace(':metric', metric)
       )
-      const response = await apiClient.post(url, filters)
+      const response = await apiClient.get(url)
+      const stats = normalizeDashboardStats(response)
+
+      if (metric === 'language') {
+        return {
+          data: stats.languageBreakdown,
+          source: 'api',
+        }
+      }
 
       return {
-        data: response,
+        data: stats.recentActivities,
         source: 'api',
       }
     } catch (error) {
@@ -110,7 +163,8 @@ class DashboardService {
   subscribeToLiveUpdates(onUpdate) {
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      const url = `${protocol}//api.graamseva.in${API_ENDPOINTS.DASHBOARD.LIVE_UPDATES}`
+      const apiHost = new URL(API_CONFIG.BASE_URL).host
+      const url = `${protocol}//${apiHost}${API_ENDPOINTS.DASHBOARD.LIVE_UPDATES}`
       
       console.log('Connecting to live updates...')
       const ws = new WebSocket(url)
