@@ -67,29 +67,54 @@ function toNumber(value, fallback = 0) {
 }
 
 function normalizeNearbyOffer(item, index) {
-  const interestGuess = toNumber(item?.annualInterestRate ?? item?.interestRate ?? item?.interest)
+  const interestGuess = toNumber(item?.annualInterestRate ?? item?.annual_interest_rate ?? item?.interestRate ?? item?.interest)
   const tenureGuess = toNumber(item?.tenureMonths ?? item?.tenure_months ?? item?.tenure)
-  const processingFeeGuess = toNumber(item?.processingFeePercent ?? item?.processingFee)
+  const processingFeeGuess = toNumber(item?.processingFeePercent ?? item?.processing_fee_percent ?? item?.processingFee)
 
   return {
-    id: item?.id || `nearby-${index + 1}`,
-    bankName: item?.bankName || item?.bank || item?.name || 'Bank',
-    branch: item?.branch || item?.branchName || item?.office || 'Nearby Branch',
+    id: item?.id || item?.loan_id || `nearby-${index + 1}`,
+    bankName: item?.bankName || item?.bank_name || item?.bank || item?.name || 'Bank',
+    branch: item?.branch || item?.branchName || item?.branch_name || item?.office || 'Nearby Branch',
     distanceKm: toNumber(item?.distanceKm ?? item?.distance_km ?? item?.distance, 0),
     annualInterestRate: interestGuess > 0 ? interestGuess : 8.5,
     tenureMonths: tenureGuess > 0 ? tenureGuess : 36,
     processingFeePercent: processingFeeGuess >= 0 ? processingFeeGuess : 0.5,
     minAmount: toNumber(item?.minAmount ?? item?.min_amount ?? item?.minimumAmount, 50000),
     maxAmount: toNumber(item?.maxAmount ?? item?.max_amount ?? item?.maximumAmount, 1000000),
-    prepayment: item?.prepayment || item?.prepaymentRule || 'As per bank policy',
-    documents: Array.isArray(item?.documents) ? item.documents : ['Aadhaar Card', 'Address Proof', 'Income/Land Proof'],
+    prepayment: item?.prepayment || item?.prepayment_policy || item?.prepaymentRule || 'As per bank policy',
+    documents: Array.isArray(item?.documents)
+      ? item.documents
+      : Array.isArray(item?.documents_required)
+        ? item.documents_required
+        : ['Aadhaar Card', 'Address Proof', 'Income/Land Proof'],
     address: item?.address || item?.fullAddress || null,
-    contactPhone: item?.contactPhone || item?.phone || null,
-    managerName: item?.managerName || item?.officer || null,
+    contactPhone: item?.contactPhone || item?.contact_phone || item?.phone || null,
+    managerName: item?.managerName || item?.manager_name || item?.officer || null,
     website: item?.website || item?.url || null,
     workingHours: item?.workingHours || item?.hours || null,
     aiSummary: item?.aiSummary || item?.summary || null,
   }
+}
+
+function normalizeLoanOptionsResponse(data) {
+  const raw =
+    (Array.isArray(data) && data) ||
+    (Array.isArray(data?.loans) && data.loans) ||
+    (Array.isArray(data?.data) && data.data) ||
+    []
+
+  return raw.map((item, index) => {
+    const normalizedNearby = normalizeNearbyOffer(item, index)
+    return {
+      ...normalizedNearby,
+      title: item?.title || `${normalizedNearby.bankName} - ${normalizedNearby.branch}`,
+      detail: item?.detail || item?.loan_type || 'Agricultural loan option',
+      amount: item?.amount || `Rs ${normalizedNearby.minAmount.toLocaleString('en-IN')} - Rs ${normalizedNearby.maxAmount.toLocaleString('en-IN')}`,
+      interest: item?.interest || `${normalizedNearby.annualInterestRate}%`,
+      tenure: item?.tenure || `${normalizedNearby.tenureMonths} months`,
+      eligibility: item?.eligibility || 'As per bank policy',
+    }
+  })
 }
 
 function normalizeNearbyResponse(data) {

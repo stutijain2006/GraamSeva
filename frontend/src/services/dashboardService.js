@@ -7,6 +7,47 @@ import { API_CONFIG, API_ENDPOINTS, buildURL } from './apiConfig'
 import { MOCK_DASHBOARD_STATS } from './mockData'
 import apiClient from './apiClient'
 
+const formatAmount = (value) => {
+  if (typeof value === 'string' && value.trim()) return value
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return '₹0'
+  return `₹${numeric.toLocaleString('en-IN')}`
+}
+
+const normalizeActivityStatus = (status) => {
+  const normalized = String(status || '').toUpperCase()
+  if (normalized === 'APPROVED') return 'Approved'
+  if (normalized === 'UNDER_REVIEW' || normalized === 'PROCESSING') return 'Processing'
+  if (normalized === 'SUBMITTED' || normalized === 'PENDING') return 'Pending'
+  if (normalized === 'REJECTED') return 'Rejected'
+  return 'Pending'
+}
+
+const normalizeActivities = (items = []) =>
+  items.map((item, index) => ({
+    id: item.id || item.application_id || `activity-${index + 1}`,
+    name: item.name || item.farmer_name || 'Farmer',
+    scheme: item.scheme || item.scheme_name || `Scheme ${item.scheme_id || '-'}`,
+    status: normalizeActivityStatus(item.status),
+    amount: item.amount || '-',
+    date: item.date || item.created_at || item.updated_at || 'Recently',
+  }))
+
+const normalizeDashboardStats = (response) => {
+  const payload = response?.data || response || {}
+  const recentApplications = payload.recent_applications || payload.recentApplications || []
+
+  return {
+    todaysCalls: payload.todaysCalls || payload.total_calls || payload.total_farmers_benefited || 0,
+    applicationsProcessed:
+      payload.applicationsProcessed || payload.total_applications || recentApplications.length || 0,
+    amountUnlocked: payload.amountUnlocked || formatAmount(payload.total_farmers_benefited || 0),
+    approvalRate: payload.approvalRate || payload.approval_rate || 'N/A',
+    languageBreakdown: payload.languageBreakdown || [],
+    recentActivities: normalizeActivities(recentApplications),
+  }
+}
+
 class DashboardService {
   /**
    * Get dashboard statistics
@@ -49,7 +90,7 @@ class DashboardService {
       const response = await apiClient.get(url, { params: options })
 
       return {
-        data: response.activities || response,
+        data: stats.recentActivities,
         source: 'api',
       }
     } catch (error) {
@@ -78,7 +119,7 @@ class DashboardService {
       const response = await apiClient.get(url, { params: { ...filters, metric } })
 
       return {
-        data: response,
+        data: stats.recentActivities,
         source: 'api',
       }
     } catch (error) {

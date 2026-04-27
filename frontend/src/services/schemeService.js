@@ -56,7 +56,7 @@ class SchemeService {
       })
 
       return {
-        data: response,
+        data: normalizeScheme(response),
         source: 'api',
       }
     } catch (error) {
@@ -83,7 +83,7 @@ class SchemeService {
       const response = await apiClient.post(url, { query, language })
 
       return {
-        data: response.results || response,
+        data: normalizeSchemeList(response),
         source: 'api',
       }
     } catch (error) {
@@ -117,6 +117,22 @@ class SchemeService {
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
         params: { state },
+      })
+
+      const normalizedState = String(state || '').trim().toLowerCase()
+      const filtered = normalizeSchemeList(response).filter((scheme) => {
+        if (!Array.isArray(scheme.states) || scheme.states.length === 0) return true
+
+        const normalizedSchemeStates = scheme.states.map((s) => String(s || '').toLowerCase())
+        return (
+          normalizedSchemeStates.includes('all') ||
+          normalizedSchemeStates.some(
+            (schemeState) =>
+              schemeState === normalizedState ||
+              schemeState.includes(normalizedState) ||
+              normalizedState.includes(schemeState),
+          )
+        )
       })
 
       return {
@@ -163,6 +179,8 @@ class SchemeService {
       const response = await apiClient.get(url, {
         headers: { 'Accept-Language': language },
       })
+
+      const items = normalizeSchemeList(response)
 
       return {
         data: asList(response, 'schemes'),

@@ -30,12 +30,13 @@ function writeCachedUpdates(language, data) {
 }
 
 function normalizeUpdateItem(item, index) {
+  const governmentLevel = item.governmentLevel || item.government_level || 'Government'
   return {
-    id: item.id ?? `ai-${index + 1}`,
+    id: item.id ?? item.scheme_id ?? `ai-${index + 1}`,
     title: item.title || item.headline || item.name || 'Government Update',
-    desc: item.desc || item.description || item.summary || '',
-    badge: item.badge || item.category || 'Update',
-    date: item.date || item.publishedAt || item.published_on || '',
+    desc: item.desc || item.description || item.details || item.summary || '',
+    badge: item.badge || item.category || governmentLevel,
+    date: item.date || item.publishedAt || item.published_on || item.updated_at || '',
     type: item.type || item.updateType || 'update',
     url: item.url || item.link || null,
     sourceName: item.sourceName || item.source_name || item.source || '',
@@ -45,6 +46,8 @@ function normalizeUpdateItem(item, index) {
 function normalizeResponse(data) {
   const rawItems =
     (Array.isArray(data) && data) ||
+    (Array.isArray(data?.schemes) && data.schemes) ||
+    (Array.isArray(data?.results) && data.results) ||
     (Array.isArray(data?.updates) && data.updates) ||
     (Array.isArray(data?.items) && data.items) ||
     (Array.isArray(data?.data) && data.data) ||
@@ -58,7 +61,7 @@ class NewSchemesOffersService {
     const { profile = {}, location = null } = context
 
     try {
-      console.log('Fetching AI-generated recent farmer government updates...')
+      console.log('Fetching latest scheme updates from API...')
 
       const aiUrl = buildURL(API_ENDPOINTS.AI.HOME_UPDATES)
       const aiResponse = await apiClient.post(
@@ -83,7 +86,7 @@ class NewSchemesOffersService {
         },
       )
 
-      const normalized = normalizeResponse(aiResponse)
+      const normalized = normalizeResponse(response)
       if (normalized.length > 0) {
         writeCachedUpdates(language, normalized)
         return {

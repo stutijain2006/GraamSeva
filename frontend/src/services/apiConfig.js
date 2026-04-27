@@ -6,6 +6,9 @@
 
 // ============================================
 // API BASE URLS
+const DEFAULT_DEV_BASE_URL = 'http://127.0.0.1:8000'
+const DEFAULT_PROD_BASE_URL = 'https://api.graamseva.in'
+
 export const API_CONFIG = {
   // Main API Base URL
   BASE_URL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
@@ -71,6 +74,17 @@ export const API_ENDPOINTS = {
     LIVE_UPDATES: '/ws/dashboard/live',
   },
 
+  MANDI: {
+    LIST: '/api/mandi/',
+    GET_CROP: '/api/mandi/:id/',
+  },
+
+  LOANS: {
+    LIST: '/api/loans/',
+    NEARBY: '/api/loans/nearby/',
+    CALCULATE: '/api/loans/calculate/',
+  },
+
   // User Profile
   USER: {
     PROFILE: '/api/user/profile',
@@ -112,7 +126,13 @@ export const API_ENDPOINTS = {
  * Build full URL from endpoint
  */
 export const buildURL = (endpoint, params = {}) => {
-  let url = `${API_CONFIG.BASE_URL}${endpoint}`
+  let normalizedEndpoint = endpoint
+
+  if (API_CONFIG.API_PREFIX) {
+    normalizedEndpoint = endpoint.replace(/^\/api(\/|$)/, `${API_CONFIG.API_PREFIX}$1`)
+  }
+
+  let url = `${API_CONFIG.BASE_URL}${normalizedEndpoint}`
 
   // Replace URL parameters
   Object.entries(params).forEach(([key, value]) => {
