@@ -173,3 +173,34 @@ class Dashboard(models.Model):
     
 	def __str__(self):
 		return f"Dashboard {self.dashboard_id}"
+
+
+class FarmerUpdate(models.Model):
+	"""Daily-ingested farmer updates searched by Home and assistant flows."""
+	CATEGORY_CHOICES = [
+		('press_release', 'Press Release'),
+		('scheme', 'Government Scheme'),
+		('mandi', 'Mandi Price'),
+		('loan', 'Loan Option'),
+	]
+
+	update_id = models.CharField(max_length=180, unique=True, db_index=True)
+	category = models.CharField(max_length=30, choices=CATEGORY_CHOICES, db_index=True)
+	title = models.CharField(max_length=500)
+	description = models.TextField(blank=True)
+	source_name = models.CharField(max_length=255)
+	source_url = models.URLField(max_length=1000, blank=True)
+	published_at = models.CharField(max_length=120, blank=True)
+	state = models.CharField(max_length=100, blank=True, db_index=True)
+	district = models.CharField(max_length=150, blank=True, db_index=True)
+	tags = JSONField(default=list)
+	payload = JSONField(default=dict)
+	fetched_at = models.DateTimeField(auto_now=True, db_index=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		db_table = 'data_farmer_update'
+		ordering = ['-fetched_at', '-id']
+
+	def __str__(self):
+		return f"{self.category}: {self.title}"

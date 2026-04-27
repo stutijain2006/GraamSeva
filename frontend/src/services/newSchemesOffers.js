@@ -86,7 +86,7 @@ class NewSchemesOffersService {
         },
       )
 
-      const normalized = normalizeResponse(response)
+      const normalized = normalizeResponse(aiResponse)
       if (normalized.length > 0) {
         writeCachedUpdates(language, normalized)
         return {

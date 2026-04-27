@@ -147,8 +147,9 @@ class LoanService {
       })
 
       console.log('Loan options fetched successfully:', response)
+      const normalized = normalizeLoanOptionsResponse(response)
       return {
-        data: response.loans || response.nearby_loans || response.results || response.data || response,
+        data: normalized,
         source: response.source || 'api',
       }
     } catch (error) {

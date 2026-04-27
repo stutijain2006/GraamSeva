@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.core.cache import cache
+from django.db.models import Q
 from django.utils import timezone
 from concurrent.futures import ThreadPoolExecutor, TimeoutError, as_completed
 import json
@@ -15,6 +16,8 @@ import requests
 from .models import VoiceConversation, VoiceTranscript, VoiceAgentResponse, VoiceLog
 from .serializers import VoiceConversationSerializer, VoiceTranscriptSerializer, VoiceAgentResponseSerializer, VoiceLogSerializer
 from .mock_responses import get_mock_response
+from data.models import FarmerUpdate, LoanOption, Scheme
+from data.mock_data import get_mock_loan_options, get_mock_schemes
 
 
 def _extract_json_object(text):
@@ -73,6 +76,8 @@ VERIFIED_FEEDS = (
 )
 
 SOURCE_FETCH_TIMEOUT = int(os.getenv('HOME_UPDATES_SOURCE_TIMEOUT', '12'))
+PIB_LATEST_URL = 'https://www.pib.gov.in/indexd.aspx?reg=3&lang=1'
+DAILY_REFRESH_HOURS = int(os.getenv('HOME_UPDATES_REFRESH_HOURS', '24'))
 
 
 def _clean_text(value):
@@ -89,6 +94,279 @@ def _safe_error_message(error):
 def _is_farmer_related(*values):
 	haystack = ' '.join(_clean_text(value).lower() for value in values)
 	return any(keyword in haystack for keyword in HOME_UPDATE_KEYWORDS)
+
+
+def _absolute_pib_url(href):
+	if not href:
+		return ''
+	if href.startswith('http'):
+		return href
+	return f"https://www.pib.gov.in/{href.lstrip('/')}"
+
+
+def _upsert_farmer_update(item):
+	FarmerUpdate.objects.update_or_create(
+		update_id=item['update_id'],
+		defaults={
+			'category': item['category'],
+			'title': item['title'][:500],
+			'description': item.get('description', ''),
+			'source_name': item.get('source_name', ''),
+			'source_url': item.get('source_url', ''),
+			'published_at': item.get('published_at', ''),
+			'state': item.get('state', ''),
+			'district': item.get('district', ''),
+			'tags': item.get('tags', []),
+			'payload': item.get('payload', {}),
+		},
+	)
+
+
+def _fetch_pib_latest_press_releases(limit=30):
+	response = requests.get(
+		PIB_LATEST_URL,
+		headers={'User-Agent': 'GraamSeva/1.0 farmer-updates'},
+		timeout=SOURCE_FETCH_TIMEOUT,
+	)
+	response.raise_for_status()
+	html = response.text
+	start = html.lower().find('latest press releases')
+	end = html.lower().find('latest explainers', start if start >= 0 else 0)
+	section = html[start:end if end > start else None] if start >= 0 else html
+	seen = set()
+	items = []
+
+	for href, text in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', section, flags=re.I | re.S):
+		title = _clean_text(text)
+		url = _absolute_pib_url(href)
+		if not title or len(title) < 12 or url in seen:
+			continue
+		if any(skip in title.lower() for skip in ['more +', 'image', 'skip to']):
+			continue
+		seen.add(url)
+		items.append({
+			'update_id': f"pib:{url}",
+			'category': 'press_release',
+			'title': title,
+			'description': title,
+			'source_name': 'Press Information Bureau',
+			'source_url': url,
+			'published_at': timezone.now().date().isoformat(),
+			'tags': ['pib', 'press-release', *_clean_text(title).lower().split()[:8]],
+			'payload': {'sourcePage': PIB_LATEST_URL},
+		})
+		if len(items) >= limit:
+			break
+
+	return items
+
+
+def _seed_scheme_updates(request_data, limit=20):
+	location = request_data.get('location') or {}
+	state = str(location.get('state') or request_data.get('state') or '').lower()
+	if Scheme.objects.exists():
+		schemes = Scheme.objects.all()
+		if state:
+			schemes = [scheme for scheme in schemes if not scheme.states or 'ALL' in scheme.states or any(state in str(s).lower() for s in scheme.states)]
+		else:
+			schemes = list(schemes)
+		items = [
+			{
+				'update_id': f"scheme:{scheme.scheme_id}",
+				'category': 'scheme',
+				'title': scheme.name,
+				'description': scheme.details,
+				'source_name': 'GraamSeva Scheme Database',
+				'source_url': '',
+				'state': state,
+				'tags': ['scheme', 'farmer', 'government', *scheme.states],
+				'payload': {'scheme_id': scheme.scheme_id},
+			}
+			for scheme in schemes[:limit]
+		]
+	else:
+		items = [
+			{
+				'update_id': f"scheme:{scheme.get('scheme_id', scheme.get('id'))}",
+				'category': 'scheme',
+				'title': scheme.get('name', ''),
+				'description': scheme.get('description') or scheme.get('details', ''),
+				'source_name': 'GraamSeva Scheme Database',
+				'source_url': '',
+				'state': state,
+				'tags': ['scheme', 'farmer', 'government', *scheme.get('states', [])],
+				'payload': scheme,
+			}
+			for scheme in get_mock_schemes('en')[:limit]
+		]
+	return items
+
+
+def _seed_loan_updates(request_data, limit=20):
+	location = request_data.get('location') or {}
+	state = str(location.get('state') or request_data.get('state') or '').lower()
+	if LoanOption.objects.exists():
+		loans = LoanOption.objects.all()[:limit]
+		items = [
+			{
+				'update_id': f"loan:{loan.loan_id}",
+				'category': 'loan',
+				'title': f"{loan.bank_name} {loan.loan_type.replace('_', ' ').title()}",
+				'description': f"{loan.branch_name}: {loan.annual_interest_rate}% annual interest, amount Rs {loan.min_amount}-{loan.max_amount}.",
+				'source_name': 'GraamSeva Loan Database',
+				'source_url': loan.website or '',
+				'state': state,
+				'tags': ['loan', 'bank', 'credit', loan.loan_type.lower()],
+				'payload': {'loan_id': loan.loan_id},
+			}
+			for loan in loans
+		]
+	else:
+		items = [
+			{
+				'update_id': f"loan:{loan.get('loan_id', loan.get('id'))}",
+				'category': 'loan',
+				'title': f"{loan.get('bank_name', 'Bank')} {loan.get('loan_type', 'Loan')}",
+				'description': f"{loan.get('branch_name', 'Branch')}: {loan.get('annual_interest_rate')}% annual interest, amount Rs {loan.get('min_amount')}-{loan.get('max_amount')}.",
+				'source_name': 'GraamSeva Loan Database',
+				'source_url': loan.get('website') or '',
+				'state': state,
+				'tags': ['loan', 'bank', 'credit'],
+				'payload': loan,
+			}
+			for loan in get_mock_loan_options('en')[:limit]
+		]
+	return items
+
+
+def _seed_mandi_update_rows(request_data, limit=10):
+	return [
+		{
+			'update_id': f"mandi:{item.get('title')}:{item.get('date')}",
+			'category': 'mandi',
+			'title': item.get('title', ''),
+			'description': item.get('desc', ''),
+			'source_name': item.get('sourceName', 'data.gov.in / Agmarknet'),
+			'source_url': item.get('url', ''),
+			'published_at': item.get('date', ''),
+			'tags': ['mandi', 'price', 'crop'],
+			'payload': item,
+		}
+		for item in _fetch_mandi_updates(request_data, limit=limit)
+	]
+
+
+def _refresh_farmer_update_db_if_needed(request_data):
+	last_update = FarmerUpdate.objects.order_by('-fetched_at').first()
+	force_refresh = bool(request_data.get('forceRefresh'))
+	if not force_refresh and last_update and (timezone.now() - last_update.fetched_at).total_seconds() < DAILY_REFRESH_HOURS * 3600:
+		return False
+
+	items = []
+	for fetcher in (
+		lambda: _fetch_pib_latest_press_releases(limit=30),
+		lambda: _seed_mandi_update_rows(request_data, limit=12),
+		lambda: _seed_scheme_updates(request_data, limit=30),
+		lambda: _seed_loan_updates(request_data, limit=30),
+	):
+		try:
+			items.extend(fetcher())
+		except Exception:
+			continue
+
+	for item in items:
+		if item.get('title'):
+			_upsert_farmer_update(item)
+
+	if not any(item.get('category') == 'press_release' for item in items):
+		try:
+			grounded_updates = _fetch_grounded_updates_with_gemini('en', 8)
+			_store_grounded_press_updates(grounded_updates)
+			items.extend([
+				{
+					'update_id': f"grounded:{update.get('url')}",
+					'category': 'press_release',
+					'title': update.get('title', ''),
+				}
+				for update in grounded_updates
+			])
+		except Exception:
+			pass
+
+	return bool(items)
+
+
+def _query_farmer_update_db(request_data, max_items=12):
+	location = request_data.get('location') or {}
+	state = str(location.get('state') or request_data.get('state') or '').strip()
+	district = str(location.get('district') or request_data.get('district') or '').strip()
+	query_terms = [
+		'farmer', 'agriculture', 'crop', 'kisan', 'mandi', 'msp', 'scheme',
+		'subsidy', 'loan', 'bank', 'credit', 'procurement', 'fisheries',
+	]
+	if state:
+		query_terms.append(state)
+	if district:
+		query_terms.append(district)
+
+	relevance = Q()
+	for term in query_terms:
+		relevance |= Q(title__icontains=term) | Q(description__icontains=term) | Q(tags__icontains=term)
+
+	location_q = Q()
+	if state:
+		location_q |= Q(state__iexact=state) | Q(state='')
+	if district:
+		location_q |= Q(district__iexact=district) | Q(district='')
+
+	queryset = FarmerUpdate.objects.filter(relevance)
+	if location_q:
+		queryset = queryset.filter(location_q)
+
+	category_order = ['press_release', 'mandi', 'scheme', 'loan']
+	per_category = max(2, max_items // len(category_order))
+	items = []
+	for category in category_order:
+		category_items = list(queryset.filter(category=category).order_by('-fetched_at', '-id')[:per_category])
+		items.extend(category_items)
+
+	if len(items) < max_items:
+		existing_ids = [item.id for item in items]
+		items.extend(
+			queryset.exclude(id__in=existing_ids).order_by('-fetched_at', '-id')[:max_items - len(items)]
+		)
+	if len(items) < max_items:
+		existing_ids = [item.id for item in items]
+		items.extend(FarmerUpdate.objects.exclude(id__in=existing_ids).order_by('-fetched_at', '-id')[:max_items - len(items)])
+	return items[:max_items]
+
+
+def _farmer_updates_to_response(items):
+	category_type = {
+		'press_release': 'new',
+		'scheme': 'new',
+		'mandi': 'market',
+		'loan': 'loan',
+	}
+	category_badge = {
+		'press_release': 'PIB Release',
+		'scheme': 'Scheme',
+		'mandi': 'Mandi Price',
+		'loan': 'Loan',
+	}
+	return [
+		{
+			'id': item.update_id,
+			'title': item.title,
+			'desc': item.description,
+			'badge': category_badge.get(item.category, 'Update'),
+			'date': item.published_at,
+			'type': category_type.get(item.category, 'update'),
+			'url': item.source_url,
+			'sourceName': item.source_name,
+		}
+		for item in items
+	]
 
 
 def _fetch_single_feed(feed, limit=8):
@@ -180,6 +458,25 @@ Rules:
 	data = _extract_json_object(_generate_gemini_text(prompt, tools=[{'google_search': {}}]))
 	updates = data.get('updates', [])
 	return updates if isinstance(updates, list) else []
+
+
+def _store_grounded_press_updates(updates):
+	for index, item in enumerate(updates):
+		url = item.get('url') or ''
+		title = item.get('title') or ''
+		if not url or not title:
+			continue
+		_upsert_farmer_update({
+			'update_id': f"grounded:{url}",
+			'category': 'press_release' if item.get('type') != 'market' else 'mandi',
+			'title': title,
+			'description': item.get('desc', ''),
+			'source_name': item.get('sourceName') or 'Official Government Source',
+			'source_url': url,
+			'published_at': item.get('date', ''),
+			'tags': ['farmer', 'government', 'grounded-search'],
+			'payload': item,
+		})
 
 
 def _fetch_feed_updates_sequential(limit=8):
@@ -365,33 +662,21 @@ QUERY: {query}
 			return Response(cached)
 
 		try:
-			source_updates = _fetch_all_source_updates(request.data, max_items)
-			if source_updates:
-				cache.set('home_updates:last_verified_sources', source_updates, cache_seconds * 2)
-			else:
-				source_updates = cache.get('home_updates:last_verified_sources', [])
-
+			refreshed = _refresh_farmer_update_db_if_needed(request.data)
+			db_items = _query_farmer_update_db(request.data, max_items)
+			source_updates = _farmer_updates_to_response(db_items)
 			if not source_updates:
-				updates = _fetch_grounded_updates_with_gemini(language, max_items)
-				payload = {
-					'updates': updates,
-					'source': 'gemini-grounded-government-search',
-					'lastFetched': timezone.now().isoformat(),
-					'refreshAfterSeconds': cache_seconds,
-					'sources': sorted({item.get('sourceName') for item in updates if item.get('sourceName')}),
-				}
-				cache.set(cache_key, payload, cache_seconds)
-				return Response(payload)
-
+				source_updates = _fetch_grounded_updates_with_gemini(language, max_items)
 			try:
 				updates = self._localize_home_updates(source_updates, language, max_items)
 			except Exception:
 				updates = source_updates[:max_items]
 			payload = {
 				'updates': updates,
-				'source': 'verified-government-sources',
+				'source': 'daily-update-database',
 				'lastFetched': timezone.now().isoformat(),
 				'refreshAfterSeconds': cache_seconds,
+				'refreshed': refreshed,
 				'sources': sorted({item.get('sourceName') for item in source_updates if item.get('sourceName')}),
 			}
 			cache.set(cache_key, payload, cache_seconds)
@@ -409,24 +694,72 @@ QUERY: {query}
 	def nearby_loans(self, request):
 		language = request.data.get('language', 'en')
 		try:
-			query = 'Suggest nearby farmer loan and tractor finance options with bank, branch, interest rate and documents'
-			ai_response = self._generate_with_gemini(query, language, request.data)
-			items = ai_response.get('result', {}).get('items', [])
-			offers = [
-				{
-					'id': f'ai-loan-{index + 1}',
-					'bankName': item.get('Bank') or item.get('Label') or item.get('बैंक') or 'Bank',
-					'branch': item.get('Branch') or item.get('Detail') or 'Nearby Branch',
-					'annualInterestRate': item.get('Interest') or item.get('Rate') or 8.5,
-					'distanceKm': item.get('Distance') or 0,
-					'documents': item.get('Documents') or ['Aadhaar Card', 'Income/Land Proof'],
-					'aiSummary': item.get('Detail') or item.get('Value') or '',
-				}
-				for index, item in enumerate(items)
-			]
-			return Response({'offers': offers, 'source': 'gemini'})
+			context = request.data or {}
+			location = context.get('location') or {}
+			lat = location.get('lat') or location.get('latitude')
+			lng = location.get('lng') or location.get('longitude')
+			state = location.get('state') or context.get('state') or ''
+			district = location.get('district') or context.get('district') or ''
+			requested_amount = context.get('requestedAmount') or 200000
+			max_items = int(context.get('maxItems') or 8)
+			prompt = f"""
+Return strict JSON only:
+{{"offers":[{{"id":"","bankName":"","branch":"","loanType":"","annualInterestRate":0,"tenureMonths":0,"processingFeePercent":0,"minAmount":0,"maxAmount":0,"distanceKm":0,"documents":[],"address":"","contactPhone":"","managerName":"","website":"","workingHours":"","aiSummary":""}}]}}
+
+Generate farmer loan options for nearby banks in India based on location and include loan-specific details, not generic placeholders.
+Context:
+- language: {language}
+- state: {state}
+- district: {district}
+- latitude: {lat}
+- longitude: {lng}
+- requestedAmount: {requested_amount}
+- audience: farmers
+Rules:
+- Provide distinct offers from different banks/schemes.
+- Include realistic bank branch names and scheme-specific terms.
+- aiSummary should explain why this offer differs from others.
+- Keep documents list specific to the scheme.
+- Return max {max_items} offers.
+"""
+			offers = _extract_json_object(_generate_gemini_text(prompt, tools=[{'google_search': {}}])).get('offers', [])
+			if not isinstance(offers, list) or len(offers) == 0:
+				raise ValueError('Gemini returned no nearby loan offers')
+			return Response({'offers': offers[:max_items], 'source': 'gemini'})
 		except Exception:
-			return Response({'offers': [], 'source': 'mock'})
+			try:
+				loan_rows = LoanOption.objects.all()
+				location = request.data.get('location') or {}
+				state = str(location.get('state') or request.data.get('state') or '').lower()
+				if state:
+					loan_rows = [row for row in loan_rows if state in (row.address or '').lower() or state in (row.branch_name or '').lower()]
+				else:
+					loan_rows = list(loan_rows)
+				offers = [
+					{
+						'id': row.loan_id,
+						'bankName': row.bank_name,
+						'branch': row.branch_name,
+						'loanType': row.loan_type,
+						'annualInterestRate': row.annual_interest_rate,
+						'tenureMonths': row.tenure_months,
+						'processingFeePercent': row.processing_fee_percent,
+						'minAmount': row.min_amount,
+						'maxAmount': row.max_amount,
+						'distanceKm': 0,
+						'documents': row.documents_required,
+						'address': row.address or '',
+						'contactPhone': row.contact_phone or '',
+						'managerName': row.manager_name or '',
+						'website': row.website or '',
+						'workingHours': row.working_hours or '',
+						'aiSummary': row.prepayment_policy or '',
+					}
+					for row in loan_rows[:8]
+				]
+				return Response({'offers': offers, 'source': 'database'})
+			except Exception:
+				return Response({'offers': [], 'source': 'mock'})
 
 	@action(detail=False, methods=['post'])
 	def tts(self, request):

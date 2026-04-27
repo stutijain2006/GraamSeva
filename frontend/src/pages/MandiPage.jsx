@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react"
 import mandiService from "../services/mandiService"
 import { t } from "../lib/i18n"
+import { STORAGE_KEYS } from "../constants/appConfig"
 import "../styles/MandiPage.css"
 
 export default function MandiPage({ tr, uiLanguage }) {
@@ -20,7 +21,14 @@ export default function MandiPage({ tr, uiLanguage }) {
     try {
       setLoading(true)
       setError(null)
-      const result = await mandiService.getMandiPrices(uiLanguage)
+      let location = null
+      try {
+        const raw = localStorage.getItem(STORAGE_KEYS.location)
+        location = raw ? JSON.parse(raw) : null
+      } catch {
+        location = null
+      }
+      const result = await mandiService.getMandiPrices(uiLanguage, location)
       setMandiPrices(result.data || [])
       setDataSource(result.source)
       console.log(`Mandi prices loaded from ${result.source}:`, result.data)

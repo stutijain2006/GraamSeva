@@ -49,15 +49,32 @@ class MandiService {
     try {
       console.log('Fetching mandi prices from API...')
 
-      const url = buildURL(API_ENDPOINTS.MANDI?.LIST || '/api/mandi')
-      const response = await apiClient.get(url, {
-        headers: { 'Accept-Language': language },
-        params: location ? { location } : {},
-      })
+      let response
+      if (location && (location.lat || location.latitude || location.state || location.district)) {
+        const url = buildURL('/api/v1/mandi/by_location/')
+        response = await apiClient.post(
+          url,
+          {
+            language,
+            latitude: location.lat || location.latitude || null,
+            longitude: location.lng || location.longitude || null,
+            state: location.state || null,
+            district: location.district || null,
+            location,
+          },
+          { headers: { 'Accept-Language': language } },
+        )
+      } else {
+        const url = buildURL(API_ENDPOINTS.MANDI?.LIST || '/api/v1/mandi/')
+        response = await apiClient.get(url, {
+          headers: { 'Accept-Language': language },
+        })
+      }
 
       console.log('Mandi prices fetched successfully:', response)
+      const normalized = normalizeMandiList(response)
       return {
-        data: response.prices || response.results || response.data || response,
+        data: normalized,
         source: response.source || 'api',
       }
     } catch (error) {

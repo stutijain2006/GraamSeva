@@ -1,26 +1,13 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import schemeService from "../services/schemeService"
 import { t } from "../lib/i18n"
 import { STORAGE_KEYS } from "../constants/appConfig"
 import "../styles/SchemesModal.css"
 
-const STATE_OPTIONS = [
-  "Delhi",
-  "Uttar Pradesh",
-  "Maharashtra",
-  "Bihar",
-  "Rajasthan",
-  "Madhya Pradesh",
-  "Punjab",
-  "Haryana",
-  "Gujarat",
-  "Odisha",
-]
-
 function inferRegionFromStorage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.location)
-    if (!raw) return "Delhi"
+    if (!raw) return ""
 
     const parsed = JSON.parse(raw)
     const source = [parsed?.state, parsed?.district, parsed?.displayName]
@@ -28,27 +15,18 @@ function inferRegionFromStorage() {
       .join(" ")
       .toLowerCase()
 
-    if (source.includes("delhi")) return "Delhi"
-    if (source.includes("uttar pradesh")) return "Uttar Pradesh"
-    if (source.includes("maharashtra")) return "Maharashtra"
-    if (source.includes("bihar")) return "Bihar"
-    if (source.includes("rajasthan")) return "Rajasthan"
-    if (source.includes("madhya pradesh")) return "Madhya Pradesh"
-    if (source.includes("punjab")) return "Punjab"
-    if (source.includes("haryana")) return "Haryana"
-    if (source.includes("gujarat")) return "Gujarat"
-    if (source.includes("odisha")) return "Odisha"
+    return parsed?.state || ""
   } catch (err) {
     console.warn("Could not read saved location for region schemes:", err)
   }
 
-  return "Delhi"
+  return ""
 }
 
 export default function SchemesPage({ uiLanguage }) {
   const [schemes, setSchemes] = useState([])
   const [regionalSchemes, setRegionalSchemes] = useState([])
-  const [selectedRegion, setSelectedRegion] = useState("Delhi")
+  const [selectedRegion, setSelectedRegion] = useState("")
   const [selectedScheme, setSelectedScheme] = useState(null)
   const [loading, setLoading] = useState(true)
   const [regionalLoading, setRegionalLoading] = useState(true)
@@ -78,6 +56,18 @@ export default function SchemesPage({ uiLanguage }) {
       setLoading(false)
     }
   }
+
+  const stateOptions = useMemo(() => {
+    const states = new Set()
+    ;[...schemes, ...regionalSchemes].forEach((scheme) => {
+      ;(scheme.states || []).forEach((s) => {
+        const val = String(s || "").trim()
+        if (val && val.toLowerCase() !== "all") states.add(val)
+      })
+    })
+    if (selectedRegion) states.add(selectedRegion)
+    return Array.from(states).sort((a, b) => a.localeCompare(b))
+  }, [schemes, regionalSchemes, selectedRegion])
 
   const loadRegionalSchemes = async (region) => {
     try {
@@ -146,7 +136,7 @@ export default function SchemesPage({ uiLanguage }) {
               onChange={(e) => setSelectedRegion(e.target.value)}
               style={{ maxWidth: "280px" }}
             >
-              {STATE_OPTIONS.map((state) => (
+              {stateOptions.map((state) => (
                 <option key={state} value={state}>
                   {state}
                 </option>

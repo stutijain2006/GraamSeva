@@ -2,6 +2,8 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.exceptions import APIException
+import math
+import requests
 
 from .models import Scheme, MandiPrice, LoanOption, Eligibility, Application, Dashboard
 from .serializers import (
@@ -34,6 +36,44 @@ class SafeViewMixin:
 		context = super().get_serializer_context()
 		context['language'] = self.get_language()
 		return context
+
+	def _state_from_request(self, request):
+		location = request.data.get('location') if hasattr(request, 'data') else None
+		location = location or {}
+		return (
+			request.query_params.get('state')
+			or request.data.get('state')
+			or location.get('state')
+			or ''
+		)
+
+	def _district_from_request(self, request):
+		location = request.data.get('location') if hasattr(request, 'data') else None
+		location = location or {}
+		return (
+			request.query_params.get('district')
+			or request.data.get('district')
+			or location.get('district')
+			or ''
+		)
+
+	def _to_float(self, value):
+		try:
+			return float(value)
+		except (TypeError, ValueError):
+			return None
+
+	def _distance_km(self, lat1, lon1, lat2, lon2):
+		if None in (lat1, lon1, lat2, lon2):
+			return None
+		radius = 6371.0
+		d_lat = math.radians(lat2 - lat1)
+		d_lon = math.radians(lon2 - lon1)
+		a = (
+			math.sin(d_lat / 2) ** 2
+			+ math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(d_lon / 2) ** 2
+		)
+		return round(radius * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)), 2)
 
 
 class SchemeViewSet(SafeViewMixin, viewsets.ModelViewSet):
@@ -129,6 +169,11 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 		try:
 			if not self.queryset.exists():
 				language = self.get_language()
+				state = self._state_from_request(request)
+				district = self._district_from_request(request)
+				if state or district:
+					location_data = {'state': state, 'district': district}
+					return Response({'prices': self._fetch_agmarknet_prices(location_data), 'results': self._fetch_agmarknet_prices(location_data), 'source': 'agmarknet'})
 				return self.mock_list_response('prices', get_mock_mandi_prices(language))
 			return super().list(request, *args, **kwargs)
 		except Exception:
@@ -148,17 +193,80 @@ class MandiPriceViewSet(SafeViewMixin, viewsets.ModelViewSet):
 	def by_location(self, request):
 		"""Get mandi prices by location (latitude/longitude)"""
 		try:
-			lat = request.data.get('latitude')
-			lng = request.data.get('longitude')
-            
-			queryset = self.queryset.all()
-			serializer = self.get_serializer(queryset, many=True)
-			return Response({'mandis': serializer.data, 'source': 'api'})
-        
+			lat = self._to_float(request.data.get('latitude'))
+			lng = self._to_float(request.data.get('longitude'))
+			state = self._state_from_request(request)
+			district = self._district_from_request(request)
+
+			if self.queryset.exists():
+				queryset = self.queryset.all()
+				if state:
+					queryset = queryset.filter(state__icontains=state)
+				if district:
+					queryset = queryset.filter(district__icontains=district)
+				serializer = self.get_serializer(queryset[:12], many=True)
+				return Response({'mandis': serializer.data, 'source': 'api'})
+
+			agmarknet_rows = self._fetch_agmarknet_prices({
+				'state': state,
+				'district': district,
+				'latitude': lat,
+				'longitude': lng,
+			})
+			if agmarknet_rows:
+				return Response({'mandis': agmarknet_rows, 'source': 'agmarknet'})
+			raise APIException('No mandi rows found')
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_mandi_prices(language)
 			return Response({'mandis': mock_data, 'source': 'mock'})
+
+	def _fetch_agmarknet_prices(self, location_data, limit=12):
+		api_key = '579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b'
+		params = {
+			'api-key': api_key,
+			'format': 'json',
+			'offset': 0,
+			'limit': limit,
+		}
+		state = location_data.get('state')
+		district = location_data.get('district')
+		if state:
+			params['filters[state]'] = state
+		if district:
+			params['filters[district]'] = district
+
+		url = 'https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070'
+		response = requests.get(url, params=params, timeout=12)
+		response.raise_for_status()
+		records = response.json().get('records', [])
+
+		by_market = {}
+		for row in records:
+			market = row.get('market') or row.get('Market') or 'Mandi'
+			state_name = row.get('state') or row.get('State') or ''
+			district_name = row.get('district') or row.get('District') or ''
+			key = f"{market}|{district_name}|{state_name}"
+			entry = by_market.setdefault(
+				key,
+				{
+					'id': key,
+					'mandi_id': key,
+					'mandi_name': market,
+					'state': state_name,
+					'district': district_name,
+					'crops': [],
+				}
+			)
+			entry['crops'].append({
+				'crop': row.get('commodity') or 'Commodity',
+				'price': row.get('modal_price') or row.get('Modal Price') or 0,
+				'unit': '₹/quintal',
+				'trend': 'stable',
+				'change': f"Min {row.get('min_price') or '-'} / Max {row.get('max_price') or '-'}",
+			})
+
+		return list(by_market.values())[:limit]
 
 	@action(detail=False, methods=['get'])
 	def by_crop(self, request):
@@ -190,7 +298,12 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 			if not self.queryset.exists():
 				language = self.get_language()
 				return self.mock_list_response('loans', get_mock_loan_options(language))
-			return super().list(request, *args, **kwargs)
+			queryset = self.queryset.all()
+			loan_type = request.query_params.get('type')
+			if loan_type:
+				queryset = queryset.filter(loan_type__iexact=loan_type)
+			serializer = self.get_serializer(queryset, many=True)
+			return Response({'loans': serializer.data, 'results': serializer.data, 'source': 'api'})
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)
@@ -208,14 +321,24 @@ class LoanOptionViewSet(SafeViewMixin, viewsets.ModelViewSet):
 	def nearby(self, request):
 		"""Get nearby loan options by location"""
 		try:
-			lat = request.data.get('latitude')
-			lng = request.data.get('longitude')
-			radius = request.data.get('radius', 10)
-            
-			queryset = self.queryset.all()[:5]
-			serializer = self.get_serializer(queryset, many=True)
-			return Response({'nearby_loans': serializer.data, 'source': 'api'})
-        
+			lat = self._to_float(request.data.get('latitude') or (request.data.get('location') or {}).get('lat') or (request.data.get('location') or {}).get('latitude'))
+			lng = self._to_float(request.data.get('longitude') or (request.data.get('location') or {}).get('lng') or (request.data.get('location') or {}).get('longitude'))
+			radius = self._to_float(request.data.get('radius', 50)) or 50
+			state = self._state_from_request(request)
+
+			queryset = self.queryset.all()
+			if state:
+				queryset = queryset.filter(address__icontains=state) | queryset.filter(branch_name__icontains=state)
+
+			serialized = self.get_serializer(queryset, many=True).data
+			for item in serialized:
+				item['distance_km'] = self._distance_km(
+					lat, lng, self._to_float(item.get('latitude')), self._to_float(item.get('longitude'))
+				)
+
+			serialized.sort(key=lambda x: x.get('distance_km') if x.get('distance_km') is not None else 999999)
+			nearby = [item for item in serialized if item.get('distance_km') is None or item.get('distance_km') <= radius][:8]
+			return Response({'nearby_loans': nearby, 'source': 'api'})
 		except Exception:
 			language = self.get_language()
 			mock_data = get_mock_loan_options(language)
