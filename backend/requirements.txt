@@ -4,7 +4,13 @@ django-cors-headers==4.3.1
 django-filter==24.1
 python-dotenv==1.0.1
 gunicorn==21.2.0
-psycopg2-binary==2.9.9
+whitenoise==6.7.0
+
+# ✅ replaced psycopg2-binary (better support, no pg_config issues)
+psycopg[binary]==3.1.19
+
+dj-database-url==2.2.0
+
 google-generativeai==0.3.0
 python-decouple==3.8
 requests==2.31.0

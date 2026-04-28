@@ -31,6 +31,7 @@ export default function HomePage({ tr, onNavigate, uiLanguage, profile }) {
       setNewOffers([])
     } finally {
       setLoading(false)
+      
     }
   }
 

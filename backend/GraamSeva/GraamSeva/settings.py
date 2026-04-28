@@ -11,11 +11,24 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+import importlib
 from pathlib import Path
-from dotenv import load_dotenv
+from urllib.parse import urlparse
+
+try:
+    load_dotenv = importlib.import_module('dotenv').load_dotenv
+except ImportError:  # pragma: no cover - fallback for environments without python-dotenv
+    def load_dotenv(*args, **kwargs):
+        return None
+
+try:
+    dj_database_url = importlib.import_module('dj_database_url')
+except ImportError:  # pragma: no cover - fallback for environments without dj-database-url
+    dj_database_url = None
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 load_dotenv(BASE_DIR.parent / '.env')
 
 
@@ -28,11 +41,15 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-lvo+buovn&-@ix1t%(!z6lb*$w
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True').lower() == 'true'
 
-ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
-    if host.strip()
-]
+def get_env_list(name, default=''):
+    return [
+        item.strip()
+        for item in os.getenv(name, default).split(',')
+        if item.strip()
+    ]
+
+
+ALLOWED_HOSTS = get_env_list('ALLOWED_HOSTS', 'localhost,127.0.0.1,.railway.app')
 
 
 # Application definition
@@ -46,12 +63,14 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'corsheaders',
+    'whitenoise.runserver_nostatic',
     'data',
     'voice_agent',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -91,6 +110,25 @@ DATABASES = {
     }
 }
 
+database_url = os.getenv('DATABASE_URL')
+if database_url and dj_database_url is not None:
+    DATABASES['default'] = dj_database_url.parse(
+        database_url,
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
+elif database_url:
+    parsed = urlparse(database_url)
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': parsed.path.lstrip('/'),
+        'USER': parsed.username or '',
+        'PASSWORD': parsed.password or '',
+        'HOST': parsed.hostname or '',
+        'PORT': parsed.port or '',
+        'CONN_MAX_AGE': 600,
+    }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -127,6 +165,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    CSRF_TRUSTED_ORIGINS = get_env_list('CSRF_TRUSTED_ORIGINS', '')
 
 # Django REST Framework Configuration
 REST_FRAMEWORK = {
@@ -156,4 +200,6 @@ CORS_ALLOW_CREDENTIALS = True
 
 # API Versioning
 API_VERSION = 'v1'
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
