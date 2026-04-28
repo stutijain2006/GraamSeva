@@ -1,0 +1,25 @@
+# dependencies
+**/node_modules/
+frontend/node_modules/
+backend/node_modules/
+backend/.python-packages/
+
+# env
+.env
+*.local
+
+# build
+dist/
+build/
+
+# logs
+*.log
+*.err
+
+# editor
+.vscode/
+.idea/
+.DS_Store
+
+*.env.local
+*__pycache__*
